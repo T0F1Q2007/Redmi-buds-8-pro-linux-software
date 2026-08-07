@@ -4,6 +4,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
 
 const DBUS_SERVICE = 'org.redmibuds8.Control';
 const DBUS_PATH = '/org/redmibuds8/Control';
@@ -34,6 +35,7 @@ const DBusProxy = Gio.DBusProxy.makeProxyWrapper(`
 </node>
 `);
 
+const BudsIndicator = GObject.registerClass(
 class BudsIndicator extends PanelMenu.Button {
     constructor() {
         super(0.0, 'Redmi Buds 8 Pro');
@@ -156,7 +158,7 @@ class BudsIndicator extends PanelMenu.Button {
         });
         this.menu.addMenuItem(audioToggle);
     }
-}
+});
 
 export default class BudsExtension extends Extension {
     enable() {
