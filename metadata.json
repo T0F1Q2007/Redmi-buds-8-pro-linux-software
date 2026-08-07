@@ -1,0 +1,9 @@
+{
+  "name": "Redmi Buds 8 Pro Manager",
+  "description": "Control ANC, EQ, and more for Redmi Buds 8 Pro.",
+  "uuid": "buds8pro@toowfeeq",
+  "shell-version": [
+    "45", "46", "47", "48", "49", "50"
+  ],
+  "url": ""
+}
