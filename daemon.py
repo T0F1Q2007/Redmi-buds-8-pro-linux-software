@@ -14,8 +14,9 @@ from dasbus.loop import EventLoop
 from gi.repository import GLib
 
 MAC_ADDRESS     = "B8:53:84:F3:D7:D0"
-RFCOMM_PORT     = 29
-XIAOMI_UUID     = "db764ac8-4b08-7f25-aafe-59d03c27bae3"
+RFCOMM_PORT     = 28
+XIAOMI_UUID     = "00001101-0000-1000-8000-00805f9b34fb"  # SPP (Serial Port Profile) — the control channel
+
 PROFILE_PATH    = "/org/redmibuds8/profile"
 DBUS_SERVICE    = "org.redmibuds8.Control"
 DBUS_PATH       = "/org/redmibuds8/Control"
