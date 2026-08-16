@@ -98,6 +98,9 @@ class BudsConnection:
             self.notify_state_change()
 
     def listen_loop(self):
+        # Query initial status upon connection
+        GLib.idle_add(self.query_status)
+        
         while self.connected:
             try:
                 data = self.sock.recv(1024)
@@ -112,27 +115,46 @@ class BudsConnection:
         log.info("Disconnected from earbuds.")
         self.notify_state_change()
 
+    def query_status(self):
+        """Query status from earbuds to get live battery levels and settings."""
+        if self.connected:
+            log.info("Querying device status...")
+            self.send_cmd("0200", "ffffffff")
+
     def _parse_incoming(self, data: bytes):
         """Parse battery levels and status reports from notification packets."""
         hex_data = data.hex()
-        log.debug(f"Rcvd hex: {hex_data}")
+        log.info(f"Rcvd hex ({len(data)} bytes): {hex_data[:120]}")
 
         # Look for Battery Tag 04 07 [L] [R] [C]
         tag_pos = hex_data.find("0407")
         if tag_pos != -1 and len(hex_data) >= tag_pos + 10:
             try:
-                l_val = int(hex_data[tag_pos+4:tag_pos+6], 16)
-                r_val = int(hex_data[tag_pos+6:tag_pos+8], 16)
-                c_val = int(hex_data[tag_pos+8:tag_pos+10], 16)
+                raw_l = int(hex_data[tag_pos+4:tag_pos+6], 16)
+                raw_r = int(hex_data[tag_pos+6:tag_pos+8], 16)
+                raw_c = int(hex_data[tag_pos+8:tag_pos+10], 16)
 
-                self.battery_left  = l_val if l_val <= 100 else -1
-                self.battery_right = r_val if r_val <= 100 else -1
-                self.battery_case  = c_val if c_val <= 100 else -1
+                def decode_bat(val):
+                    if val == 0xFF:
+                        return -1, False
+                    level = val & 0x7F
+                    charging = bool(val & 0x80)
+                    return (level if level <= 100 else -1), charging
 
-                log.info(f"Battery parsed: Left={self.battery_left}%, Right={self.battery_right}%, Case={self.battery_case}%")
+                l_level, l_chg = decode_bat(raw_l)
+                r_level, r_chg = decode_bat(raw_r)
+                c_level, c_chg = decode_bat(raw_c)
+
+                self.battery_left  = l_level
+                self.battery_right = r_level
+                self.battery_case  = c_level
+
+                log.info(f"Battery parsed: Left={self.battery_left}% ({'⚡' if l_chg else ''}), Right={self.battery_right}% ({'⚡' if r_chg else ''}), Case={self.battery_case}% ({'⚡' if c_chg else ''})")
                 self.notify_state_change()
             except Exception as e:
                 log.warning(f"Error parsing battery tag: {e}")
+
+
 
     def send_cmd(self, svc_hex: str, payload_hex: str):
         if not self.connected or not self.sock:
