@@ -5,9 +5,12 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
+import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 
 const DBUS_SERVICE = 'org.redmibuds8.Control';
 const DBUS_PATH = '/org/redmibuds8/Control';
+
 
 const DBusProxy = Gio.DBusProxy.makeProxyWrapper(`
 <node>
@@ -403,12 +406,36 @@ export default class BudsExtension extends Extension {
     enable() {
         this._indicator = new BudsIndicator();
         Main.panel.addToStatusArea(this.uuid, this._indicator);
+
+        try {
+            this._settings = this.getSettings();
+            Main.wm.addKeybinding(
+                'toggle-menu',
+                this._settings,
+                Meta.KeyBindingFlags.NONE,
+                Shell.ActionMode.ALL,
+                () => {
+                    if (this._indicator) {
+                        this._indicator.menu.toggle();
+                    }
+                }
+            );
+        } catch (e) {
+            console.error('Failed to add keybinding toggle-menu:', e);
+        }
     }
 
     disable() {
+        try {
+            Main.wm.removeKeybinding('toggle-menu');
+        } catch (e) {
+            // ignore
+        }
         if (this._indicator) {
             this._indicator.destroy();
             this._indicator = null;
         }
+        this._settings = null;
     }
 }
+

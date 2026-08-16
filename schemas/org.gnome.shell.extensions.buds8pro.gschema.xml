@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.buds8pro" path="/org/gnome/shell/extensions/buds8pro/">
+    <key name="toggle-menu" type="as">
+      <default>['&lt;Super&gt;minus']</default>
+      <summary>Toggle Redmi Buds 8 Pro menu</summary>
+      <description>Keyboard shortcut to open/close the Redmi Buds 8 Pro control menu</description>
+    </key>
+  </schema>
+</schemalist>
