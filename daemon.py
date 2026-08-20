@@ -51,6 +51,7 @@ class BudsConnection:
         self.in_ear_det     = True
         self.audio_mode     = 0  # 0: Off, 1: Dolby, 2: Xiaomi Immersive
         self.head_tracking  = False
+        self.le_mode        = False
 
         self._status_timer  = None
 
@@ -72,6 +73,7 @@ class BudsConnection:
             'in_ear_det': self.in_ear_det,
             'audio_mode': self.audio_mode,
             'head_tracking': self.head_tracking,
+            'le_mode': self.le_mode,
         }
 
     def notify_state_change(self):
@@ -459,10 +461,22 @@ class BudsInterface:
             self.conn.send_cmd("f200", "03006801")
         self._emit_state()
 
+    def SetLeMode(self, enabled: Bool):
+        log.info(f"DBus call: SetLeMode({enabled})")
+        self.conn.le_mode = enabled
+        val = 1 if enabled else 0
+        self.conn.send_cmd("f200", f"030028{val:02x}")
+        self.conn.send_cmd("f200", f"030007{val:02x}")
+        self._emit_state()
+
     # Properties (kept for introspection / fallback)
     @property
     def Connected(self) -> Bool:
         return self.conn.connected
+
+    @property
+    def LeMode(self) -> Bool:
+        return self.conn.le_mode
 
     @property
     def BatteryLeft(self) -> Int:

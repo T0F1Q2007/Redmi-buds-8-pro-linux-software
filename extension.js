@@ -25,6 +25,7 @@ const DBusProxy = Gio.DBusProxy.makeProxyWrapper(`
         <method name="SetInEarDetection"><arg type="b" name="enabled" direction="in"/></method>
         <method name="SetAudioMode"><arg type="i" name="mode" direction="in"/></method>
         <method name="SetHeadTracking"><arg type="b" name="enabled" direction="in"/></method>
+        <method name="SetLeMode"><arg type="b" name="enabled" direction="in"/></method>
         <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
         <property name="Connected" type="b" access="read"/>
         <property name="BatteryLeft" type="i" access="read"/>
@@ -48,6 +49,7 @@ let _s = {
     charging_left: false, charging_right: false, charging_case: false,
     anc_mode: 0, anc_depth: 0, trans_submode: 2, eq_mode: 1,
     commute_mode: 0, in_ear_det: true, audio_mode: 0, head_tracking: false,
+    le_mode: false,
 };
 
 /* ─── Indicator ─────────────────────────────────────────── */
@@ -150,6 +152,8 @@ class BudsIndicator extends PanelMenu.Button {
             this._headToggle.setToggleState(_s.head_tracking);
             // In-Ear
             this._earToggle.setToggleState(_s.in_ear_det);
+            // LE Mode
+            this._leToggle.setToggleState(_s.le_mode);
         } catch (e) { console.error('Refresh error:', e); }
         this._updating = false;
     }
@@ -361,6 +365,14 @@ class BudsIndicator extends PanelMenu.Button {
             this._proxy.SetInEarDetectionRemote(st);
         });
         this.menu.addMenuItem(this._earToggle);
+
+        /* LE Mode (Low Latency) */
+        this._leToggle = new P.PopupSwitchMenuItem('LE Mode (Low Latency)', false);
+        this._leToggle.connect('toggled', (_, st) => {
+            if (this._updating || !this._proxy) return;
+            this._proxy.SetLeModeRemote(st);
+        });
+        this.menu.addMenuItem(this._leToggle);
 
         /* Initial visibility */
         this._ancSubRow.visible = false;
