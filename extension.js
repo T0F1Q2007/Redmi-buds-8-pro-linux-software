@@ -221,6 +221,7 @@ class BudsIndicator extends PanelMenu.Button {
     /* ── Build Menu ──────────────────────────────────────── */
     _buildMenu() {
         const P = PopupMenu;
+        this.menu.actor.add_style_class_name('buds-menu-box');
 
         /* Battery */
         let bItem = new P.PopupBaseMenuItem({ reactive: false });

@@ -270,9 +270,9 @@ class BudsConnection:
                         self.audio_mode = mode
                         log.info(f"Audio mode from device: {mode}")
                         changed = True
-                # Head tracking: 03 00 68 [val]
+                # Head tracking: 03 00 68 [val] (0x01=OFF, 0x00/0x02=ON)
                 elif payload[:3] == bytes([0x03, 0x00, 0x68]) and len(payload) >= 4:
-                    val = bool(payload[3])
+                    val = (payload[3] != 0x01)
                     if val != self.head_tracking:
                         self.head_tracking = val
                         log.info(f"Head tracking from device: {val}")
@@ -425,8 +425,14 @@ class BudsInterface:
     def SetInEarDetection(self, enabled: Bool):
         log.info(f"DBus call: SetInEarDetection({enabled})")
         self.conn.in_ear_det = enabled
-        mode = 1 if enabled else 0
-        self.conn.send_cmd("0800", f"0206{mode:02x}")
+        if enabled:
+            self.conn.send_cmd("0800", "020601")
+            self.conn.send_cmd("f200", "03002401")
+            self.conn.send_cmd("f200", "04002401")
+        else:
+            self.conn.send_cmd("0800", "020600")
+            self.conn.send_cmd("f200", "03002400")
+            self.conn.send_cmd("f200", "04002400")
         self._emit_state()
 
     def SetAudioMode(self, mode: Int):
@@ -437,17 +443,20 @@ class BudsInterface:
         self.conn.send_cmd("f200", p)
         if mode in (0, 1) and self.conn.head_tracking:
             self.conn.head_tracking = False
-            self.conn.send_cmd("f200", "03006800")
+            self.conn.send_cmd("f200", "03006801")
         self._emit_state()
 
     def SetHeadTracking(self, enabled: Bool):
         log.info(f"DBus call: SetHeadTracking({enabled})")
         self.conn.head_tracking = enabled
-        if enabled and self.conn.audio_mode != 2:
-            self.conn.audio_mode = 2
-            self.conn.send_cmd("f200", "03001d0b")
-        mode_val = 1 if enabled else 0
-        self.conn.send_cmd("f200", f"030068{mode_val:02x}")
+        if enabled:
+            if self.conn.audio_mode != 2:
+                self.conn.audio_mode = 2
+                self.conn.send_cmd("f200", "03001d0b")
+            self.conn.send_cmd("f200", "03006800")
+            self.conn.send_cmd("f200", "03006802")
+        else:
+            self.conn.send_cmd("f200", "03006801")
         self._emit_state()
 
     # Properties (kept for introspection / fallback)
