@@ -13,7 +13,7 @@ This software suite provides a complete reverse-engineered control stack:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    GNOME Shell Top Panel UI                     │
-│                        (extension.js)                           │
+│               (extension.js & custom SVG icons)                 │
 └────────────────────────────────┬────────────────────────────────┘
                                  │ D-Bus IPC (org.redmibuds8.Control)
 ┌────────────────────────────────┴────────────────────────────────┐
@@ -26,9 +26,21 @@ This software suite provides a complete reverse-engineered control stack:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-1. **RFCOMM/SPP Control Daemon (`daemon.py`):** Maintains persistent bidirectional socket communication over Serial Port Profile (Channel 28), handles packet serialization/deserialization, parses battery notifications, and exposes a D-Bus IPC interface (`org.redmibuds8.Control`).
-2. **Native GNOME Shell Extension (`extension.js`):** Integrates seamlessly into the GNOME desktop environment, supplying real-time battery readouts, selective noise control sub-menus, spatial mutual-exclusion logic, and custom keyboard shortcuts.
-3. **Audio Stabilization Module (`fix_lhdc_audio.sh`):** Configures WirePlumber parameters to eliminate dynamic bitrate underrun artifacts on LHDC v5 audio streams while enabling LE Audio (BAP / LC3) profiles.
+1. **RFCOMM/SPP Control Daemon (`daemon.py`):** Maintains persistent bidirectional socket communication over Serial Port Profile (Channel 28), parses incoming M-BAP frame packets, maintains live battery levels via a 15-second background query loop, and emits JSON state payloads over D-Bus (`org.redmibuds8.Control`).
+2. **Native GNOME Shell Extension (`extension.js`):** Redesigned UI adhering to Figma design specifications featuring horizontal pill buttons, custom SVG icons for distinct earbud and case telemetry, hover tooltips, light/dark theme adaptation, and custom keyboard shortcuts (`Super + -`).
+3. **Audio Stabilization Module (`52-lhdc-fix.conf`):** Configures WirePlumber parameters to enforce Constant Quality (`cq`) mode and increases A2DP buffer headroom to eliminate audio underrun pops on LHDC v5 streams.
+
+---
+
+## UI & Design Features
+
+* **Compact Pill Button Layout:** Segmented horizontal controls for Noise Control, Immersive Commute, and Spatial Audio replacing verbose text dropdowns.
+* **Custom Symbolic SVG Icons:** Dedicated vector assets for Left Earbud, Right Earbud, Charging Case, Noise Cancellation, Transparency sub-modes (Regular, Enhanced Voice, Enhanced Ambience), Commute presets (Train, Bus, Airplane), and Spatial Audio (Dolby, Xiaomi Immersive).
+* **Hover Tooltips:** Native cursor tooltips revealing full option titles when hovering over icon buttons.
+* **Adaptive Light/Dark Theme Styling:** High-contrast pill buttons with dark icon inversion on active selection, seamlessly matching both GNOME Light and Dark shell themes.
+* **Smart ANC & Manual Depth Slider:** Toggling Smart ANC enables adaptive noise suppression (`04 00 0B 01 00`). Disabling Smart ANC reveals a 3-tier depth slider (Deep, Balanced, Light).
+* **Conditional Visibility:** Sub-options (ANC Depth, Transparency Modes, Head Tracking) automatically expand only when their parent mode is active.
+* **Keyboard Navigation & Shortcut:** Press **`Super` + `-`** (`Win + -`) to toggle the extension menu directly.
 
 ---
 
@@ -44,11 +56,13 @@ All commands (Host → Earbuds) and notifications (Earbuds → Host) strictly ad
 |---|---|---|---|
 | `0x00` | 3 | Magic Header | `FE DC BA` |
 | `0x03` | 1 | Message Type | `C4` (Host Command), `C7` (Notification), `04` (ACK) |
-| `0x04` | 2 | Service Group | `08 00` (Hardware/ANC), `F2 00` (Settings/Audio), `09 00` (DeviceInfo) |
+| `0x04` | 2 | Service Group | `08 00` (Hardware/ANC), `F2 00` (Settings/Audio), `0E 00` (Status) |
 | `0x06` | 1 | Length | `Payload Length + 1` (Includes Sequence Byte) |
 | `0x07` | 1 | Sequence ID | Monotonically incrementing counter (`0x00`–`0xFF`) |
-| `0x08` | Variable | Payload | Command specific byte parameters |
+| `0x08` | Variable | Payload | Command-specific byte parameters |
 | End | 1 | Footer | `EF` |
+
+> **Packet Parser Note:** Packet parsing walks the byte stream by inspecting `FE DC BA` headers and checking length parameters. This prevents false-positive payload matches on packet header length/sequence bytes.
 
 ---
 
@@ -65,18 +79,14 @@ All commands (Host → Earbuds) and notifications (Earbuds → Host) strictly ad
   * Balanced ANC: `04 00 0B 01 02`
   * Light ANC: `04 00 0B 01 03`
 * **Transparency Sub-modes (`Service Group F2 00`):**
+  * Regular Transparency: `04 00 0B 02 02`
   * Enhanced Voice: `04 00 0B 02 00`
   * Enhanced Ambience Sound: `04 00 0B 02 01`
-  * Regular Transparency: `04 00 0B 02 02`
 
-#### Equalizer & Environmental Audio
-* **Equalizer Presets (`Service Group F2 00`):** `04 00 36 01 [Preset]`
-  * `01` Standard | `02` Music | `03` Video | `04` Game | `05` Audio Books
+#### Environmental Audio & Spatial Modes
 * **Immersive Commute (`Service Group F2 00`):** `03 00 67 [Mode]`
   * `00` Off | `01` Train | `02` Public Transit | `03` Airplane Engine
-
-#### Spatial Audio & Head Tracking
-* **Audio Mode (`Service Group F2 00`):**
+* **Spatial Audio Mode (`Service Group F2 00`):**
   * Off (Standard Stereo): `03 00 1D 03`
   * Dolby Audio (Static Spatial): `03 00 1D 0A`
   * Xiaomi Immersive Audio (Dimensional): `03 00 1D 0B`
@@ -89,6 +99,14 @@ Battery status is reported via notification payload tag `04 07`:
 * Bits `0..6` (`val & 0x7F`): Battery level percentage (`0`–`100`).
 * Bit `7` (`val & 0x80`): Charging state indicator (`1` = Charging in case).
 * Value `0xFF`: Component disconnected / unavailable.
+
+---
+
+## Bluetooth LE Audio Compatibility Note
+
+The **Redmi Buds 8 Pro (Chinese Edition)** does **NOT** hardware-support Bluetooth LE Audio (BAP / LC3 codec streaming):
+* **UUID Analysis:** The hardware advertises Volume Control (`0x1844`), Volume Offset (`0x1845`), and Coordinated Set (`0x1846`), but lacks Published Audio Capabilities (`PACS` `0x1850`) and Audio Stream Control (`ASCS` `0x184E`).
+* **Conclusion:** LE Audio profile switches will not appear in GNOME Sound Settings as the hardware lacks LE Audio BAP endpoints.
 
 ---
 
@@ -134,8 +152,9 @@ systemctl --user daemon-reload
 systemctl --user enable --now redmibuds8.service
 ```
 
-### 3. Enable Extension & Shortcut
+### 3. Enable Extension & Compile Schemas
 ```bash
+glib-compile-schemas schemas/
 gnome-extensions enable buds8pro@toowfeeq
 ```
 Use **`Super` + `-`** (`Win + -`) to toggle the extension menu directly from your keyboard.
@@ -146,21 +165,36 @@ Use **`Super` + `-`** (`Win + -`) to toggle the extension menu directly from you
 
 High-bitrate codecs (LHDC v5) under PipeWire can experience buffer underrun pops when dynamic bitrate scaling (`lhdc-abr`) responds to minor RF fluctuations.
 
-Execute the included optimization script to enforce Constant Quality (`cq`) mode and enable LE Audio (LC3) profile roles:
-```bash
-./fix_lhdc_audio.sh
+WirePlumber configuration (`~/.config/wireplumber/wireplumber.conf.d/52-lhdc-fix.conf`) enforces Constant Quality (`cq`) mode and increases headroom:
+```hocon
+monitor.bluez.properties = {
+  bluez5.a2dp.lhdc-quality = "cq"
+}
+
+monitor.bluez.rules = [
+  {
+    matches = [ { node.name = "~bluez_output.*" } ]
+    actions = {
+      update-props = {
+        api.alsa.headroom = 8192
+        node.latency = "2048/48000"
+        session.suspend-timeout-seconds = 0
+      }
+    }
+  }
+]
 ```
 
 ---
 
 ## Repository Structure & Branching Model
 
-This project follows an established Git Flow development model:
-* **`master`:** Production-ready release builds.
-* **`feature/daemon-state-battery`:** Daemon IPC and telemetry parsing.
-* **`feature/ui-improvements-controls`:** GNOME UI components, checkmark indicators, and debouncing logic.
-* **`feature/keybindings`:** GSettings schema and keyboard shortcut integration.
-* **`feature/lhdc-audio-tweak-fix`:** Audio stack optimization and buffer stabilization scripts.
+This project follows a structured Git development workflow with feature branches:
+* **`main`:** Stable primary release branch.
+* **`feature/ui-figma-redesign`:** Figma-compliant pill button UI, custom SVG icons, hover tooltips, and light theme styling.
+* **`feature/daemon-packet-parser`:** Packet-structure parser, false-positive fix for in-ear detection, and 15s battery query timer.
+* **`feature/audio-buffer-tuning`:** LHDC v5 A2DP headroom stabilization and WirePlumber buffer parameters.
+* **`feature/initial-reverse-engineering`:** Protocol framing and RFCOMM channel 28 base socket communication.
 
 ---
 
