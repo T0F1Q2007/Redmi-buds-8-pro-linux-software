@@ -105,3 +105,39 @@ Every command sent to and received from the earbuds follows a strict byte sequen
 Battery levels are reported in status packets (or `C7` notifications):
 - Look for tag `04 07` in status sequence: `04 07 [LeftHex] [RightHex] [CaseHex]`
 - `64` = 100%, `5F` = 95%, `FF` = Unknown / Disconnected.
+- Bit 7 (`val & 0x80`) = charging flag. Bits 0-6 (`val & 0x7F`) = percentage.
+
+---
+
+## Parsing Notes (Critical)
+
+### False-Positive Hex String Matching
+**Bug discovered 2026-08-20:** Naïve `hex_data.find("0206")` matches ANY occurrence
+of `0206` in the raw hex stream, including packet **length** + **sequence number**
+bytes in headers. For example, packet `FE DC BA C7 07 00 02 06 01 EF` has:
+- Service group `07 00`, length `02`, seq `06`, payload `01`
+- But `0206` falsely matches as In-Ear Detection payload `02 06 [val]`
+
+**Fix:** Parse packets using proper frame structure — walk through `FE DC BA` headers,
+extract type/service/length/seq/payload, and only process payloads from `C7`
+(notification) packets, ignoring `04` (ACK) packets.
+
+### Service Group 0x0E00
+Observed in status responses. Functions identically to `0x0800` for ANC mode
+reporting: `02 04 [mode]` payloads appear in both `0x0800` and `0x0E00` service groups.
+
+### Service Group 0xF400
+Observed in periodic notifications. Contains settings state echoes but with different
+payload prefixes than `0xF200`. May be a read-only mirror of `0xF200` settings.
+
+---
+
+## LE Audio / BAP / LC3 Compatibility
+
+The **Redmi Buds 8 Pro (Chinese Edition)** does NOT support Bluetooth LE Audio:
+- **Missing UUIDs:** No PACS (`0x1850`), ASCS (`0x184E`), or BAP profiles advertised.
+- **Present UUIDs:** Volume Control (`0x1844`), Volume Offset Control (`0x1845`),
+  Coordinated Set Identification (`0x1846`) — these are GATT services but NOT
+  sufficient for LE Audio streaming.
+- **Conclusion:** LC3 / BAP streaming is a hardware limitation, not configurable.
+
