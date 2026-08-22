@@ -358,13 +358,8 @@ class BudsIndicator extends PanelMenu.Button {
 
         this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
 
-        /* In-Ear Detection */
-        this._earToggle = new P.PopupSwitchMenuItem('In-Ear Detection', true);
-        this._earToggle.connect('toggled', (_, st) => {
-            if (this._updating || !this._proxy) return;
-            this._proxy.SetInEarDetectionRemote(st);
-        });
-        this.menu.addMenuItem(this._earToggle);
+        /* ── Device Settings ── */
+        this._addSectionTitle('Device Settings');
 
         /* LE Mode (Low Latency) */
         this._leToggle = new P.PopupSwitchMenuItem('LE Mode (Low Latency)', false);
@@ -373,6 +368,14 @@ class BudsIndicator extends PanelMenu.Button {
             this._proxy.SetLeModeRemote(st);
         });
         this.menu.addMenuItem(this._leToggle);
+
+        /* In-Ear Detection */
+        this._earToggle = new P.PopupSwitchMenuItem('In-Ear Detection', true);
+        this._earToggle.connect('toggled', (_, st) => {
+            if (this._updating || !this._proxy) return;
+            this._proxy.SetInEarDetectionRemote(st);
+        });
+        this.menu.addMenuItem(this._earToggle);
 
         /* Initial visibility */
         this._ancSubRow.visible = false;
