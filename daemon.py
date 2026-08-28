@@ -107,17 +107,17 @@ class BudsConnection:
                     self.sock = None
                 self._stop_periodic_query()
                 self.notify_state_change()
-                log.warning(f"Connection failed: {e}. Retrying in 5 seconds...")
-                time.sleep(5)
+                log.warning(f"Connection failed: {e}. Retrying in 10 seconds...")
+                time.sleep(10)
 
     def _start_periodic_query(self):
-        """Periodic status query every 15 seconds to keep battery and state fresh."""
+        """Periodic status query every 30 seconds to keep battery and state fresh without overwhelming RFCOMM."""
         def _do_query():
             if self.connected:
                 self.query_status()
                 return GLib.SOURCE_CONTINUE
             return GLib.SOURCE_REMOVE
-        self._status_timer = GLib.timeout_add_seconds(15, _do_query)
+        self._status_timer = GLib.timeout_add_seconds(30, _do_query)
 
     def _stop_periodic_query(self):
         if self._status_timer:

@@ -1,12 +1,14 @@
 /* ═══════════════════════════════════════════════════════════
    Redmi Buds 8 Pro – GNOME Shell Extension Stylesheet
-   Supports both dark and light shell themes.
+   Palettes:
+   - Obsidian Chrome (Dark): Onyx #0A0A0A, Blue Slate #536878, Alabaster Grey #E5E4E2
+   - Scarlet Glacier (Light): Bright Snow #FAFBFD, Periwinkle #BFB4DC, Inferno #AA0003
    ═══════════════════════════════════════════════════════════ */
 
-/* ── Battery Row ─────────────────────────────────────────── */
+/* ── Common Base Layout ──────────────────────────────────── */
 .buds-battery-row {
     spacing: 6px;
-    padding: 4px 8px;
+    padding: 6px 10px;
 }
 
 .buds-batt-icon {
@@ -22,24 +24,13 @@
     font-weight: bold;
 }
 
-/* ── Section Titles ──────────────────────────────────────── */
 .buds-section-title {
-    font-size: 10pt;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.55);
-    padding: 2px 0 0 0;
+    font-size: 10.5pt;
+    font-weight: 700;
+    padding: 4px 0 2px 0;
+    letter-spacing: 0.5px;
 }
 
-/* Light mode override */
-.popup-menu-content .buds-section-title {
-    color: rgba(0, 0, 0, 0.55);
-}
-
-StThemeContext:dark .buds-section-title {
-    color: rgba(255, 255, 255, 0.55);
-}
-
-/* ── Pill Buttons ────────────────────────────────────────── */
 .buds-button-group {
     spacing: 8px;
     padding: 4px 0;
@@ -49,51 +40,14 @@ StThemeContext:dark .buds-section-title {
     min-width: 48px;
     min-height: 40px;
     border-radius: 20px;
-    background-color: rgba(128, 128, 128, 0.2);
     padding: 8px 14px;
-    border: 1px solid rgba(128, 128, 128, 0.15);
+    transition-duration: 150ms;
 }
 
-.buds-pill-button:hover {
-    background-color: rgba(128, 128, 128, 0.35);
-}
-
-.buds-pill-button:active {
-    background-color: rgba(128, 128, 128, 0.45);
-}
-
-/* Active/selected button: high contrast */
-.buds-pill-button.active {
-    background-color: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-}
-
-.buds-pill-button.active:hover {
-    background-color: rgba(255, 255, 255, 1.0);
-}
-
-/* Icon colors: inherit from parent in dark mode, override for active */
 .buds-pill-icon {
     icon-size: 18px;
 }
 
-.buds-pill-button.active .buds-pill-icon {
-    color: #1e1e1e;
-    -st-icon-style: symbolic;
-}
-
-/* ── Tooltip ─────────────────────────────────────────────── */
-.buds-tooltip {
-    background-color: rgba(30, 30, 30, 0.92);
-    color: #ffffff;
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 9.5pt;
-    font-weight: 500;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-/* ── Slider ──────────────────────────────────────────────── */
 .buds-slider-box {
     padding: 0 4px;
     spacing: 2px;
@@ -101,28 +55,152 @@ StThemeContext:dark .buds-section-title {
 
 .buds-slider-label {
     font-size: 9.5pt;
-    color: rgba(255, 255, 255, 0.5);
     padding-bottom: 2px;
 }
 
-/* ── Toggle switch green highlight ───────────────────────── */
-.toggle-switch:checked {
-    background-color: #2ec27e;
+.buds-tooltip {
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 9.5pt;
+    font-weight: 600;
 }
 
-/* ── General compactness & Dark Mode Popup ────────────────── */
+.popup-menu-item {
+    padding: 6px 12px;
+    border-radius: 12px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   DARK MODE: OBSIDIAN CHROME
+   Onyx: #0A0A0A | Blue Slate: #536878 | Alabaster Grey: #E5E4E2
+   ═══════════════════════════════════════════════════════════ */
 .buds-menu-box .popup-menu-content {
-    background-color: #161618 !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background-color: #0A0A0A !important;
+    border: 1.5px solid #536878 !important;
     border-radius: 20px !important;
-    padding: 8px 6px !important;
+    padding: 10px 8px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85) !important;
 }
 
+.buds-menu-box .buds-batt-icon,
+.buds-menu-box .buds-battery-value,
 .buds-menu-box .popup-menu-item {
-    padding: 4px 12px;
+    color: #E5E4E2 !important;
 }
 
-.buds-menu-box .popup-menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
+.buds-menu-box .buds-section-title,
+.buds-menu-box .buds-slider-label {
+    color: #536878 !important;
 }
 
+/* Dark Mode Inactive Pill Button */
+.buds-menu-box .buds-pill-button {
+    background-color: rgba(83, 104, 120, 0.22) !important;
+    border: 1.5px solid #536878 !important;
+}
+
+.buds-menu-box .buds-pill-button:hover,
+.buds-menu-box .buds-pill-button:focus {
+    background-color: rgba(83, 104, 120, 0.45) !important;
+    border-color: #E5E4E2 !important;
+}
+
+.buds-menu-box .buds-pill-icon {
+    color: #E5E4E2 !important;
+}
+
+/* Dark Mode Active Pill Button (Alabaster Grey fill, Onyx dark icon) */
+.buds-menu-box .buds-pill-button.active {
+    background-color: #E5E4E2 !important;
+    border: 1.5px solid #E5E4E2 !important;
+}
+
+.buds-menu-box .buds-pill-button.active .buds-pill-icon {
+    color: #0A0A0A !important;
+}
+
+/* Dark Mode Focus outline */
+.buds-menu-box .buds-pill-button:focus,
+.buds-menu-box .popup-menu-item:focus {
+    outline: 2px solid #536878 !important;
+    background-color: rgba(83, 104, 120, 0.35) !important;
+}
+
+.buds-menu-box .buds-tooltip {
+    background-color: #0A0A0A !important;
+    color: #E5E4E2 !important;
+    border: 1.5px solid #536878 !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8) !important;
+}
+
+.buds-menu-box .popup-separator-menu-item-separator {
+    background-color: #536878 !important;
+}
+
+.buds-menu-box .toggle-switch:checked {
+    background-color: #536878 !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE: SCARLET GLACIER
+   Bright Snow: #FAFBFD | Periwinkle: #BFB4DC | Inferno: #AA0003
+   ═══════════════════════════════════════════════════════════ */
+.buds-menu-box.light-theme .popup-menu-content {
+    background-color: #FAFBFD !important;
+    border: 1.5px solid #BFB4DC !important;
+    box-shadow: 0 8px 24px rgba(170, 0, 3, 0.15) !important;
+}
+
+.buds-menu-box.light-theme .buds-batt-icon,
+.buds-menu-box.light-theme .buds-battery-value,
+.buds-menu-box.light-theme .popup-menu-item {
+    color: #AA0003 !important;
+}
+
+.buds-menu-box.light-theme .buds-section-title,
+.buds-menu-box.light-theme .buds-slider-label {
+    color: #AA0003 !important;
+}
+
+/* Light Mode Inactive Pill Button */
+.buds-menu-box.light-theme .buds-pill-button {
+    background-color: #BFB4DC !important;
+    border: 1.5px solid #BFB4DC !important;
+}
+
+.buds-menu-box.light-theme .buds-pill-button:hover,
+.buds-menu-box.light-theme .buds-pill-button:focus {
+    background-color: rgba(191, 180, 220, 0.85) !important;
+    border-color: #AA0003 !important;
+}
+
+.buds-menu-box.light-theme .buds-pill-icon {
+    color: #AA0003 !important;
+}
+
+/* Light Mode Active Pill Button (Inferno fill, Bright Snow icon) */
+.buds-menu-box.light-theme .buds-pill-button.active {
+    background-color: #AA0003 !important;
+    border: 1.5px solid #AA0003 !important;
+}
+
+.buds-menu-box.light-theme .buds-pill-button.active .buds-pill-icon {
+    color: #FAFBFD !important;
+}
+
+.buds-menu-box.light-theme .buds-tooltip {
+    background-color: #FAFBFD !important;
+    color: #AA0003 !important;
+    border: 1.5px solid #AA0003 !important;
+    box-shadow: 0 4px 14px rgba(170, 0, 3, 0.2) !important;
+}
+
+.buds-menu-box.light-theme .popup-separator-menu-item-separator {
+    background-color: #BFB4DC !important;
+}
+
+.buds-menu-box.light-theme .toggle-switch:checked {
+    background-color: #AA0003 !important;
+}

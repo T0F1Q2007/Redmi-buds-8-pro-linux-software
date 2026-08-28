@@ -123,14 +123,30 @@ class BudsIndicator extends PanelMenu.Button {
         } catch (_) {}
     }
 
+    /* ── Theme Class Updater (Light vs Dark) ─────────────── */
+    _updateThemeClass() {
+        try {
+            let interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+            let scheme = interfaceSettings.get_string('color-scheme');
+            if (scheme === 'prefer-light') {
+                this.menu.actor.add_style_class_name('light-theme');
+            } else {
+                this.menu.actor.remove_style_class_name('light-theme');
+            }
+        } catch (_) {}
+    }
+
     /* ── Full UI refresh ─────────────────────────────────── */
     _refreshUI() {
         this._updating = true;
         try {
+            this._updateThemeClass();
             const fmt = v => (v >= 0 && v <= 100) ? `${v}%` : '--';
             this._battL.set_text(fmt(_s.battery_left));
             this._battR.set_text(fmt(_s.battery_right));
             this._battC.set_text(fmt(_s.battery_case));
+
+            // Noise Control buttons
             this._setActive(this._ncBtns, _s.anc_mode);
             // Conditional sub-sections
             this._ancSubRow.visible   = (_s.anc_mode === 1);
@@ -165,10 +181,59 @@ class BudsIndicator extends PanelMenu.Button {
         });
     }
 
+    /* ── Keyboard Focus Navigation Helper ─────────────────── */
+    _getAllFocusableWidgets() {
+        let list = [];
+        this._ncBtns.forEach(b => list.push(b));
+        if (this._ancSubRow.visible) list.push(this._smartToggle);
+        if (this._sliderRow.visible) list.push(this._ancSlider);
+        if (this._transRow.visible) this._transBtns.forEach(b => list.push(b));
+        this._cmBtns.forEach(b => list.push(b));
+        this._saBtns.forEach(b => list.push(b));
+        if (this._htRow.visible) list.push(this._headToggle);
+        list.push(this._leToggle);
+        list.push(this._earToggle);
+        return list;
+    }
+
+    _setupKeyNav(widget) {
+        widget.can_focus = true;
+        widget.track_hover = true;
+        widget.connect('key-press-event', (actor, event) => {
+            let symbol = event.get_key_symbol();
+            let isNext = (symbol === Clutter.KEY_Right || symbol === Clutter.KEY_Down || symbol === Clutter.KEY_Tab);
+            let isPrev = (symbol === Clutter.KEY_Left || symbol === Clutter.KEY_Up || symbol === Clutter.KEY_ISO_Left_Tab);
+
+            if (isNext) {
+                this._focusNextWidget(actor, 1);
+                return Clutter.EVENT_STOP;
+            } else if (isPrev) {
+                this._focusNextWidget(actor, -1);
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+    }
+
+    _focusNextWidget(currentActor, direction) {
+        let list = this._getAllFocusableWidgets();
+        if (list.length === 0) return;
+        let idx = list.indexOf(currentActor);
+        if (idx === -1) idx = 0;
+        else idx = (idx + direction + list.length) % list.length;
+        list[idx].grab_key_focus();
+    }
+
+    _focusFirstWidget() {
+        let list = this._getAllFocusableWidgets();
+        if (list.length > 0) {
+            list[0].grab_key_focus();
+        }
+    }
+
     /* ── Pill button factory ─────────────────────────────── */
     _pill(iconId, value, tooltip, cb) {
         let icon;
-        // Use custom icon if it exists, otherwise fallback to system icon
         let customPath = GLib.build_filenamev([
             this._extensionPath, 'icons', `${iconId}-symbolic.svg`
         ]);
@@ -219,6 +284,7 @@ class BudsIndicator extends PanelMenu.Button {
             }
         });
 
+        this._setupKeyNav(btn);
         return btn;
     }
 
@@ -226,6 +292,17 @@ class BudsIndicator extends PanelMenu.Button {
     _buildMenu() {
         const P = PopupMenu;
         this.menu.actor.add_style_class_name('buds-menu-box');
+
+        // Automatic grab focus on menu open
+        this.menu.connect('open-state-changed', (_menu, open) => {
+            if (open) {
+                this._updateThemeClass();
+                GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                    this._focusFirstWidget();
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        });
 
         /* Battery */
         let bItem = new P.PopupBaseMenuItem({ reactive: false });
@@ -270,6 +347,7 @@ class BudsIndicator extends PanelMenu.Button {
             if (this._updating || !this._proxy) return;
             this._proxy.SetAncDepthRemote(st ? 0 : 2);
         });
+        this._setupKeyNav(this._smartToggle);
         this._ancSubRow = this._smartToggle;
         this.menu.addMenuItem(this._smartToggle);
 
@@ -284,6 +362,7 @@ class BudsIndicator extends PanelMenu.Button {
             let d = v < 0.25 ? 3 : v < 0.75 ? 2 : 1;
             this._proxy.SetAncDepthRemote(d);
         });
+        this._setupKeyNav(this._ancSlider);
         slBox.add_child(this._ancSlider);
         slItem.add_child(slBox);
         this._sliderRow = slItem;
@@ -353,6 +432,7 @@ class BudsIndicator extends PanelMenu.Button {
             if (this._updating || !this._proxy) return;
             this._proxy.SetHeadTrackingRemote(st);
         });
+        this._setupKeyNav(this._headToggle);
         this._htRow = this._headToggle;
         this.menu.addMenuItem(this._headToggle);
 
@@ -367,6 +447,7 @@ class BudsIndicator extends PanelMenu.Button {
             if (this._updating || !this._proxy) return;
             this._proxy.SetLeModeRemote(st);
         });
+        this._setupKeyNav(this._leToggle);
         this.menu.addMenuItem(this._leToggle);
 
         /* In-Ear Detection */
@@ -375,6 +456,7 @@ class BudsIndicator extends PanelMenu.Button {
             if (this._updating || !this._proxy) return;
             this._proxy.SetInEarDetectionRemote(st);
         });
+        this._setupKeyNav(this._earToggle);
         this.menu.addMenuItem(this._earToggle);
 
         /* Initial visibility */
