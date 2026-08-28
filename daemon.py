@@ -80,35 +80,73 @@ class BudsConnection:
         if self.state_callback:
             GLib.idle_add(self.state_callback)
 
-    def connect(self):
-        """Active outbound RFCOMM connect loop with retry."""
+    def is_bluez_connected(self, system_bus):
+        """Check if BlueZ actually has an active Bluetooth connection to the earbuds."""
+        try:
+            dev_path = f"/org/bluez/hci0/dev_{MAC_ADDRESS.replace(':', '_')}"
+            dev_obj = system_bus.get_object("org.bluez", dev_path)
+            props = dbus.Interface(dev_obj, "org.freedesktop.DBus.Properties")
+            return bool(props.Get("org.bluez.Device1", "Connected"))
+        except Exception:
+            return False
+
+    def connect_loop(self, system_bus):
+        """Event-driven RFCOMM connect loop that ONLY connects when BlueZ is connected to the laptop."""
         while True:
-            try:
-                log.info(f"Trying RFCOMM connect to {MAC_ADDRESS}:{RFCOMM_PORT}...")
-                s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-                s.settimeout(10)
-                s.connect((MAC_ADDRESS, RFCOMM_PORT))
-                s.settimeout(None)
+            # Check if earbuds are connected to laptop via BlueZ
+            if not self.is_bluez_connected(system_bus):
+                was_connected = False
                 with self.lock:
-                    self.sock      = s
-                    self.connected = True
-                log.info("Connected to earbuds RFCOMM successfully.")
-                self.notify_state_change()
-                self._start_periodic_query()
-                self.listen_loop()
-            except Exception as e:
-                with self.lock:
-                    self.connected = False
-                    if self.sock:
-                        try:
-                            self.sock.close()
-                        except Exception:
-                            pass
-                    self.sock = None
-                self._stop_periodic_query()
-                self.notify_state_change()
-                log.warning(f"Connection failed: {e}. Retrying in 10 seconds...")
-                time.sleep(10)
+                    if self.connected or self.sock is not None:
+                        was_connected = True
+                        self.connected = False
+                        self.battery_left  = -1
+                        self.battery_right = -1
+                        self.battery_case  = -1
+                        if self.sock:
+                            try:
+                                self.sock.close()
+                            except Exception:
+                                pass
+                        self.sock = None
+                if was_connected:
+                    self._stop_periodic_query()
+                    self.notify_state_change()
+                    log.info("Earbuds disconnected in BlueZ. Sleeping RFCOMM without polling.")
+                # Idle quietly without sending ANY Bluetooth radio packets
+                time.sleep(3)
+                continue
+
+            # Earbuds are connected to laptop in BlueZ! Connect RFCOMM if not already connected
+            if not self.connected:
+                try:
+                    log.info(f"Earbuds connected to laptop. Opening RFCOMM to {MAC_ADDRESS}:{RFCOMM_PORT}...")
+                    s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+                    s.settimeout(8)
+                    s.connect((MAC_ADDRESS, RFCOMM_PORT))
+                    s.settimeout(None)
+                    with self.lock:
+                        self.sock      = s
+                        self.connected = True
+                    log.info("Connected to earbuds RFCOMM successfully.")
+                    self.notify_state_change()
+                    self._start_periodic_query()
+                    self.listen_loop()
+                except Exception as e:
+                    with self.lock:
+                        self.connected = False
+                        if self.sock:
+                            try:
+                                self.sock.close()
+                            except Exception:
+                                pass
+                        self.sock = None
+                    self._stop_periodic_query()
+                    self.notify_state_change()
+                    log.warning(f"RFCOMM connection attempt failed: {e}. Waiting 5 seconds...")
+                    time.sleep(5)
+            else:
+                time.sleep(2)
 
     def _start_periodic_query(self):
         """Periodic status query every 30 seconds to keep battery and state fresh without overwhelming RFCOMM."""
@@ -537,7 +575,7 @@ def register_bluez_profile(system_bus, buds_conn: BudsConnection):
         "org.bluez.ProfileManager1"
     )
     opts = {
-        "AutoConnect": dbus.Boolean(True),
+        "AutoConnect": dbus.Boolean(False),
         "Name": dbus.String("XiaomiMBAP"),
         "Channel": dbus.UInt16(RFCOMM_PORT),
     }
@@ -568,7 +606,7 @@ def main():
     except Exception as e:
         log.warning(f"Could not register BlueZ profile: {e}")
 
-    conn_thread = Thread(target=buds_conn.connect, daemon=True)
+    conn_thread = Thread(target=buds_conn.connect_loop, args=(system_bus,), daemon=True)
     conn_thread.start()
 
     interface = BudsInterface(buds_conn)
