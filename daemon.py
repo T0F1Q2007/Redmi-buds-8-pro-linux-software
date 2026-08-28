@@ -286,6 +286,13 @@ class BudsConnection:
                         self.commute_mode = val
                         log.info(f"Commute mode from device: {val}")
                         changed = True
+                # LE Mode / Low Latency: 03 00 28 [val] (0x00=ON, 0x01=OFF)
+                elif (payload[:3] == bytes([0x03, 0x00, 0x28]) or payload[:3] == bytes([0x03, 0x00, 0x07])) and len(payload) >= 4:
+                    val = (payload[3] == 0x00)
+                    if val != self.le_mode:
+                        self.le_mode = val
+                        log.info(f"LE mode from device: {val}")
+                        changed = True
 
         return changed
 
@@ -464,7 +471,7 @@ class BudsInterface:
     def SetLeMode(self, enabled: Bool):
         log.info(f"DBus call: SetLeMode({enabled})")
         self.conn.le_mode = enabled
-        val = 1 if enabled else 0
+        val = 0 if enabled else 1
         self.conn.send_cmd("f200", f"030028{val:02x}")
         self.conn.send_cmd("f200", f"030007{val:02x}")
         self._emit_state()

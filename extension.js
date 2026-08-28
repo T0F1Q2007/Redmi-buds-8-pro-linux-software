@@ -181,19 +181,36 @@ class BudsIndicator extends PanelMenu.Button {
         });
     }
 
-    /* ── Keyboard Focus Navigation Helper ─────────────────── */
-    _getAllFocusableWidgets() {
-        let list = [];
-        this._ncBtns.forEach(b => list.push(b));
-        if (this._ancSubRow.visible) list.push(this._smartToggle);
-        if (this._sliderRow.visible) list.push(this._ancSlider);
-        if (this._transRow.visible) this._transBtns.forEach(b => list.push(b));
-        this._cmBtns.forEach(b => list.push(b));
-        this._saBtns.forEach(b => list.push(b));
-        if (this._htRow.visible) list.push(this._headToggle);
-        list.push(this._leToggle);
-        list.push(this._earToggle);
-        return list;
+    /* ── 2D Keyboard Grid Navigation ──────────────────────── */
+    _getVisibleRows() {
+        let rows = [];
+        // Row 0: Noise Control buttons
+        rows.push(this._ncBtns);
+        // Row 1: Smart ANC Toggle (if visible)
+        if (this._ancSubRow && this._ancSubRow.visible) {
+            rows.push([this._smartToggle]);
+        }
+        // Row 2: ANC Slider (if visible)
+        if (this._sliderRow && this._sliderRow.visible) {
+            rows.push([this._ancSlider]);
+        }
+        // Row 3: Transparency Sub-mode buttons (if visible)
+        if (this._transRow && this._transRow.visible) {
+            rows.push(this._transBtns);
+        }
+        // Row 4: Immersive Commute buttons
+        rows.push(this._cmBtns);
+        // Row 5: Spatial Audio buttons
+        rows.push(this._saBtns);
+        // Row 6: Head Tracking Toggle (if visible)
+        if (this._htRow && this._htRow.visible) {
+            rows.push([this._headToggle]);
+        }
+        // Row 7: LE Mode Toggle
+        rows.push([this._leToggle]);
+        // Row 8: In-Ear Detection Toggle
+        rows.push([this._earToggle]);
+        return rows;
     }
 
     _setupKeyNav(widget) {
@@ -201,33 +218,86 @@ class BudsIndicator extends PanelMenu.Button {
         widget.track_hover = true;
         widget.connect('key-press-event', (actor, event) => {
             let symbol = event.get_key_symbol();
-            let isNext = (symbol === Clutter.KEY_Right || symbol === Clutter.KEY_Down || symbol === Clutter.KEY_Tab);
-            let isPrev = (symbol === Clutter.KEY_Left || symbol === Clutter.KEY_Up || symbol === Clutter.KEY_ISO_Left_Tab);
 
-            if (isNext) {
-                this._focusNextWidget(actor, 1);
+            // Slider specific left/right adjustments
+            if (widget === this._ancSlider) {
+                if (symbol === Clutter.KEY_Left) {
+                    let v = Math.max(0.0, this._ancSlider.value - 0.5);
+                    this._ancSlider.value = v;
+                    return Clutter.EVENT_STOP;
+                } else if (symbol === Clutter.KEY_Right) {
+                    let v = Math.min(1.0, this._ancSlider.value + 0.5);
+                    this._ancSlider.value = v;
+                    return Clutter.EVENT_STOP;
+                }
+            }
+
+            if (symbol === Clutter.KEY_Right) {
+                this._navigateGrid(actor, 0, 1);
                 return Clutter.EVENT_STOP;
-            } else if (isPrev) {
-                this._focusNextWidget(actor, -1);
+            } else if (symbol === Clutter.KEY_Left) {
+                this._navigateGrid(actor, 0, -1);
+                return Clutter.EVENT_STOP;
+            } else if (symbol === Clutter.KEY_Down || symbol === Clutter.KEY_Tab) {
+                this._navigateGrid(actor, 1, 0);
+                return Clutter.EVENT_STOP;
+            } else if (symbol === Clutter.KEY_Up || symbol === Clutter.KEY_ISO_Left_Tab) {
+                this._navigateGrid(actor, -1, 0);
+                return Clutter.EVENT_STOP;
+            } else if (symbol === Clutter.KEY_Return || symbol === Clutter.KEY_space || symbol === Clutter.KEY_KP_Enter) {
+                if (widget instanceof St.Button) {
+                    widget.emit('clicked');
+                } else if (typeof widget.toggle === 'function') {
+                    widget.toggle();
+                } else if (widget._switch) {
+                    widget.toggle();
+                }
+                return Clutter.EVENT_STOP;
+            } else if (symbol === Clutter.KEY_Escape) {
+                this.menu.close();
                 return Clutter.EVENT_STOP;
             }
-            return Clutter.EVENT_PROPAGATE;
+            return Clutter.EVENT_STOP;
         });
     }
 
-    _focusNextWidget(currentActor, direction) {
-        let list = this._getAllFocusableWidgets();
-        if (list.length === 0) return;
-        let idx = list.indexOf(currentActor);
-        if (idx === -1) idx = 0;
-        else idx = (idx + direction + list.length) % list.length;
-        list[idx].grab_key_focus();
+    _navigateGrid(currentActor, rowDelta, colDelta) {
+        let rows = this._getVisibleRows();
+        if (rows.length === 0) return;
+
+        let curRowIdx = -1;
+        let curColIdx = -1;
+
+        for (let r = 0; r < rows.length; r++) {
+            let col = rows[r].indexOf(currentActor);
+            if (col !== -1) {
+                curRowIdx = r;
+                curColIdx = col;
+                break;
+            }
+        }
+
+        if (curRowIdx === -1) {
+            this._focusFirstWidget();
+            return;
+        }
+
+        if (colDelta !== 0) {
+            let curRow = rows[curRowIdx];
+            let nextCol = (curColIdx + colDelta + curRow.length) % curRow.length;
+            curRow[nextCol].grab_key_focus();
+        } else if (rowDelta !== 0) {
+            let nextRowIdx = (curRowIdx + rowDelta + rows.length) % rows.length;
+            let nextRow = rows[nextRowIdx];
+            let targetCol = Math.min(curColIdx, nextRow.length - 1);
+            nextRow[targetCol].grab_key_focus();
+        }
     }
 
     _focusFirstWidget() {
-        let list = this._getAllFocusableWidgets();
-        if (list.length > 0) {
-            list[0].grab_key_focus();
+        let rows = this._getVisibleRows();
+        if (rows.length > 0 && rows[0].length > 0) {
+            rows[0][0].grab_key_focus();
         }
     }
 
