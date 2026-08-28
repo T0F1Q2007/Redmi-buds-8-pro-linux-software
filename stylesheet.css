@@ -41,6 +41,8 @@
     min-height: 40px;
     border-radius: 20px;
     padding: 8px 14px;
+    border: none !important;
+    outline: none !important;
     transition-duration: 150ms;
 }
 
@@ -63,11 +65,14 @@
     padding: 6px 12px;
     font-size: 9.5pt;
     font-weight: 600;
+    border: none !important;
 }
 
 .popup-menu-item {
     padding: 6px 12px;
     border-radius: 12px;
+    border: none !important;
+    outline: none !important;
 }
 
 
@@ -77,7 +82,7 @@
    ═══════════════════════════════════════════════════════════ */
 .buds-menu-box .popup-menu-content {
     background-color: #0A0A0A !important;
-    border: 1.5px solid #536878 !important;
+    border: none !important;
     border-radius: 20px !important;
     padding: 10px 8px !important;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85) !important;
@@ -94,16 +99,14 @@
     color: #536878 !important;
 }
 
-/* Dark Mode Inactive Pill Button */
+/* Dark Mode Inactive Pill Button (No static border) */
 .buds-menu-box .buds-pill-button {
     background-color: rgba(83, 104, 120, 0.22) !important;
-    border: 1.5px solid #536878 !important;
+    border: none !important;
 }
 
-.buds-menu-box .buds-pill-button:hover,
-.buds-menu-box .buds-pill-button:focus {
+.buds-menu-box .buds-pill-button:hover {
     background-color: rgba(83, 104, 120, 0.45) !important;
-    border-color: #E5E4E2 !important;
 }
 
 .buds-menu-box .buds-pill-icon {
@@ -113,24 +116,25 @@
 /* Dark Mode Active Pill Button (Alabaster Grey fill, Onyx dark icon) */
 .buds-menu-box .buds-pill-button.active {
     background-color: #E5E4E2 !important;
-    border: 1.5px solid #E5E4E2 !important;
+    border: none !important;
 }
 
 .buds-menu-box .buds-pill-button.active .buds-pill-icon {
     color: #0A0A0A !important;
 }
 
-/* Dark Mode Focus outline */
+/* KEYBOARD NAVIGATION FOCUS RING (Dark Mode) - Appears ONLY when focused via keyboard */
 .buds-menu-box .buds-pill-button:focus,
 .buds-menu-box .popup-menu-item:focus {
-    outline: 2px solid #536878 !important;
-    background-color: rgba(83, 104, 120, 0.35) !important;
+    border: 2px solid #E5E4E2 !important;
+    outline: none !important;
+    background-color: rgba(83, 104, 120, 0.5) !important;
 }
 
 .buds-menu-box .buds-tooltip {
     background-color: #0A0A0A !important;
     color: #E5E4E2 !important;
-    border: 1.5px solid #536878 !important;
+    border: none !important;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8) !important;
 }
 
@@ -149,7 +153,7 @@
    ═══════════════════════════════════════════════════════════ */
 .buds-menu-box.light-theme .popup-menu-content {
     background-color: #FAFBFD !important;
-    border: 1.5px solid #BFB4DC !important;
+    border: none !important;
     box-shadow: 0 8px 24px rgba(170, 0, 3, 0.15) !important;
 }
 
@@ -164,16 +168,14 @@
     color: #AA0003 !important;
 }
 
-/* Light Mode Inactive Pill Button */
+/* Light Mode Inactive Pill Button (No static border) */
 .buds-menu-box.light-theme .buds-pill-button {
     background-color: #BFB4DC !important;
-    border: 1.5px solid #BFB4DC !important;
+    border: none !important;
 }
 
-.buds-menu-box.light-theme .buds-pill-button:hover,
-.buds-menu-box.light-theme .buds-pill-button:focus {
+.buds-menu-box.light-theme .buds-pill-button:hover {
     background-color: rgba(191, 180, 220, 0.85) !important;
-    border-color: #AA0003 !important;
 }
 
 .buds-menu-box.light-theme .buds-pill-icon {
@@ -183,17 +185,24 @@
 /* Light Mode Active Pill Button (Inferno fill, Bright Snow icon) */
 .buds-menu-box.light-theme .buds-pill-button.active {
     background-color: #AA0003 !important;
-    border: 1.5px solid #AA0003 !important;
+    border: none !important;
 }
 
 .buds-menu-box.light-theme .buds-pill-button.active .buds-pill-icon {
     color: #FAFBFD !important;
 }
 
+/* KEYBOARD NAVIGATION FOCUS RING (Light Mode) - Appears ONLY when focused via keyboard */
+.buds-menu-box.light-theme .buds-pill-button:focus,
+.buds-menu-box.light-theme .popup-menu-item:focus {
+    border: 2px solid #AA0003 !important;
+    outline: none !important;
+}
+
 .buds-menu-box.light-theme .buds-tooltip {
     background-color: #FAFBFD !important;
     color: #AA0003 !important;
-    border: 1.5px solid #AA0003 !important;
+    border: none !important;
     box-shadow: 0 4px 14px rgba(170, 0, 3, 0.2) !important;
 }
 
