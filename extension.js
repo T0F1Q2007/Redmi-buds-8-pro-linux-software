@@ -27,23 +27,11 @@ const DBusProxy = Gio.DBusProxy.makeProxyWrapper(`
         <method name="SetHeadTracking"><arg type="b" name="enabled" direction="in"/></method>
         <method name="SetLeMode"><arg type="b" name="enabled" direction="in"/></method>
         <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
-        <property name="Connected" type="b" access="read"/>
-        <property name="BatteryLeft" type="i" access="read"/>
-        <property name="BatteryRight" type="i" access="read"/>
-        <property name="BatteryCase" type="i" access="read"/>
-        <property name="AncMode" type="i" access="read"/>
-        <property name="AncDepth" type="i" access="read"/>
-        <property name="TransparencySubmode" type="i" access="read"/>
-        <property name="EqMode" type="i" access="read"/>
-        <property name="ImmersiveCommute" type="i" access="read"/>
-        <property name="InEarDetection" type="b" access="read"/>
-        <property name="AudioMode" type="i" access="read"/>
-        <property name="HeadTracking" type="b" access="read"/>
     </interface>
 </node>
 `);
 
-/* ─── State ─────────────────────────────────────────────── */
+/* ─── Shared Telemetry State ─────────────────────────────── */
 let _s = {
     connected: false, battery_left: -1, battery_right: -1, battery_case: -1,
     charging_left: false, charging_right: false, charging_case: false,
@@ -52,7 +40,7 @@ let _s = {
     le_mode: false,
 };
 
-/* ─── Indicator ─────────────────────────────────────────── */
+/* ─── Indicator Button & Menu ────────────────────────────── */
 const BudsIndicator = GObject.registerClass(
 class BudsIndicator extends PanelMenu.Button {
 
@@ -73,7 +61,6 @@ class BudsIndicator extends PanelMenu.Button {
         this._connectDBus();
     }
 
-    /* ── Custom icon helper ──────────────────────────────── */
     _gicon(name) {
         let file = Gio.File.new_for_path(
             GLib.build_filenamev([this._extensionPath, 'icons', `${name}-symbolic.svg`])
@@ -81,7 +68,6 @@ class BudsIndicator extends PanelMenu.Button {
         return new Gio.FileIcon({ file });
     }
 
-    /* ── D-Bus connection ────────────────────────────────── */
     async _connectDBus() {
         try {
             this._proxy = await new Promise((resolve, reject) => {
@@ -91,44 +77,24 @@ class BudsIndicator extends PanelMenu.Button {
             this._signalId = this._proxy.connectSignal('StateChanged',
                 (_proxy, _sender, [json]) => {
                     try {
-                        let parsed = JSON.parse(json);
-                        Object.assign(_s, parsed);
+                        Object.assign(_s, JSON.parse(json));
                     } catch (e) {
                         console.error('StateChanged parse error:', e);
                     }
                     this._refreshUI();
                 }
             );
-            this._readFallback();
             this._refreshUI();
         } catch (e) {
-            console.error('Buds D-Bus error:', e);
+            console.error('Buds D-Bus connection error:', e);
         }
     }
 
-    _readFallback() {
-        if (!this._proxy) return;
-        try {
-            _s.connected     = this._proxy.Connected     ?? false;
-            _s.battery_left  = this._proxy.BatteryLeft   ?? -1;
-            _s.battery_right = this._proxy.BatteryRight  ?? -1;
-            _s.battery_case  = this._proxy.BatteryCase   ?? -1;
-            _s.anc_mode      = this._proxy.AncMode       ?? 0;
-            _s.anc_depth     = this._proxy.AncDepth      ?? 0;
-            _s.trans_submode = this._proxy.TransparencySubmode ?? 2;
-            _s.commute_mode  = this._proxy.ImmersiveCommute   ?? 0;
-            _s.in_ear_det    = this._proxy.InEarDetection     ?? true;
-            _s.audio_mode    = this._proxy.AudioMode     ?? 0;
-            _s.head_tracking = this._proxy.HeadTracking  ?? false;
-        } catch (_) {}
-    }
-
-    /* ── Theme Class Updater (Light vs Dark) ─────────────── */
     _updateThemeClass() {
         try {
             let interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
-            let scheme = interfaceSettings.get_string('color-scheme');
-            if (scheme === 'prefer-light') {
+            let isLight = (interfaceSettings.get_string('color-scheme') === 'prefer-light');
+            if (isLight) {
                 this.menu.actor.add_style_class_name('light-theme');
             } else {
                 this.menu.actor.remove_style_class_name('light-theme');
@@ -136,7 +102,6 @@ class BudsIndicator extends PanelMenu.Button {
         } catch (_) {}
     }
 
-    /* ── Full UI refresh ─────────────────────────────────── */
     _refreshUI() {
         this._updating = true;
         try {
@@ -146,31 +111,30 @@ class BudsIndicator extends PanelMenu.Button {
             this._battR.set_text(fmt(_s.battery_right));
             this._battC.set_text(fmt(_s.battery_case));
 
-            // Noise Control buttons
+            // Noise Control
             this._setActive(this._ncBtns, _s.anc_mode);
-            // Conditional sub-sections
-            this._ancSubRow.visible   = (_s.anc_mode === 1);
+            this._ancSubRow.visible = (_s.anc_mode === 1);
             this._smartToggle.setToggleState(_s.anc_depth === 0);
-            this._sliderRow.visible   = (_s.anc_mode === 1 && _s.anc_depth !== 0);
+            this._sliderRow.visible = (_s.anc_mode === 1 && _s.anc_depth !== 0);
             if (_s.anc_depth !== 0 && _s.anc_mode === 1) {
                 const map = { 1: 1.0, 2: 0.5, 3: 0.0 };
                 this._ancSlider.value = map[_s.anc_depth] ?? 0.5;
             }
-            this._transRow.visible    = (_s.anc_mode === 2);
+            this._transRow.visible = (_s.anc_mode === 2);
             this._setActive(this._transBtns, _s.trans_submode);
 
-            // Commute
+            // Commute & Spatial
             this._setActive(this._cmBtns, _s.commute_mode);
-            // Spatial
             this._setActive(this._saBtns, _s.audio_mode);
-            // Head Tracking
+
+            // Head Tracking & Device Settings
             this._htRow.visible = (_s.audio_mode === 2);
             this._headToggle.setToggleState(_s.head_tracking);
-            // In-Ear
-            this._earToggle.setToggleState(_s.in_ear_det);
-            // LE Mode
             this._leToggle.setToggleState(_s.le_mode);
-        } catch (e) { console.error('Refresh error:', e); }
+            this._earToggle.setToggleState(_s.in_ear_det);
+        } catch (e) {
+            console.error('Refresh error:', e);
+        }
         this._updating = false;
     }
 
@@ -183,32 +147,14 @@ class BudsIndicator extends PanelMenu.Button {
 
     /* ── 2D Keyboard Grid Navigation ──────────────────────── */
     _getVisibleRows() {
-        let rows = [];
-        // Row 0: Noise Control buttons
-        rows.push(this._ncBtns);
-        // Row 1: Smart ANC Toggle (if visible)
-        if (this._ancSubRow && this._ancSubRow.visible) {
-            rows.push([this._smartToggle]);
-        }
-        // Row 2: ANC Slider (if visible)
-        if (this._sliderRow && this._sliderRow.visible) {
-            rows.push([this._ancSlider]);
-        }
-        // Row 3: Transparency Sub-mode buttons (if visible)
-        if (this._transRow && this._transRow.visible) {
-            rows.push(this._transBtns);
-        }
-        // Row 4: Immersive Commute buttons
+        let rows = [this._ncBtns];
+        if (this._ancSubRow && this._ancSubRow.visible) rows.push([this._smartToggle]);
+        if (this._sliderRow && this._sliderRow.visible) rows.push([this._ancSlider]);
+        if (this._transRow && this._transRow.visible) rows.push(this._transBtns);
         rows.push(this._cmBtns);
-        // Row 5: Spatial Audio buttons
         rows.push(this._saBtns);
-        // Row 6: Head Tracking Toggle (if visible)
-        if (this._htRow && this._htRow.visible) {
-            rows.push([this._headToggle]);
-        }
-        // Row 7: LE Mode Toggle
+        if (this._htRow && this._htRow.visible) rows.push([this._headToggle]);
         rows.push([this._leToggle]);
-        // Row 8: In-Ear Detection Toggle
         rows.push([this._earToggle]);
         return rows;
     }
@@ -219,31 +165,24 @@ class BudsIndicator extends PanelMenu.Button {
         widget.connect('key-press-event', (actor, event) => {
             let symbol = event.get_key_symbol();
 
-            // Slider specific left/right adjustments
             if (widget === this._ancSlider) {
                 if (symbol === Clutter.KEY_Left) {
-                    let v = Math.max(0.0, this._ancSlider.value - 0.5);
-                    this._ancSlider.value = v;
+                    this._ancSlider.value = Math.max(0.0, this._ancSlider.value - 0.5);
                     return Clutter.EVENT_STOP;
                 } else if (symbol === Clutter.KEY_Right) {
-                    let v = Math.min(1.0, this._ancSlider.value + 0.5);
-                    this._ancSlider.value = v;
+                    this._ancSlider.value = Math.min(1.0, this._ancSlider.value + 0.5);
                     return Clutter.EVENT_STOP;
                 }
             }
 
             if (symbol === Clutter.KEY_Right) {
                 this._navigateGrid(actor, 0, 1);
-                return Clutter.EVENT_STOP;
             } else if (symbol === Clutter.KEY_Left) {
                 this._navigateGrid(actor, 0, -1);
-                return Clutter.EVENT_STOP;
             } else if (symbol === Clutter.KEY_Down || symbol === Clutter.KEY_Tab) {
                 this._navigateGrid(actor, 1, 0);
-                return Clutter.EVENT_STOP;
             } else if (symbol === Clutter.KEY_Up || symbol === Clutter.KEY_ISO_Left_Tab) {
                 this._navigateGrid(actor, -1, 0);
-                return Clutter.EVENT_STOP;
             } else if (symbol === Clutter.KEY_Return || symbol === Clutter.KEY_space || symbol === Clutter.KEY_KP_Enter) {
                 if (widget instanceof St.Button) {
                     widget.emit('clicked');
@@ -252,10 +191,8 @@ class BudsIndicator extends PanelMenu.Button {
                 } else if (widget._switch) {
                     widget.toggle();
                 }
-                return Clutter.EVENT_STOP;
             } else if (symbol === Clutter.KEY_Escape) {
                 this.menu.close();
-                return Clutter.EVENT_STOP;
             }
             return Clutter.EVENT_STOP;
         });
@@ -267,7 +204,6 @@ class BudsIndicator extends PanelMenu.Button {
 
         let curRowIdx = -1;
         let curColIdx = -1;
-
         for (let r = 0; r < rows.length; r++) {
             let col = rows[r].indexOf(currentActor);
             if (col !== -1) {
@@ -301,23 +237,14 @@ class BudsIndicator extends PanelMenu.Button {
         }
     }
 
-    /* ── Pill button factory ─────────────────────────────── */
+    /* ── Pill Button Factory ─────────────────────────────── */
     _pill(iconId, value, tooltip, cb) {
-        let icon;
         let customPath = GLib.build_filenamev([
             this._extensionPath, 'icons', `${iconId}-symbolic.svg`
         ]);
-        if (GLib.file_test(customPath, GLib.FileTest.EXISTS)) {
-            icon = new St.Icon({
-                gicon: new Gio.FileIcon({ file: Gio.File.new_for_path(customPath) }),
-                icon_size: 18, style_class: 'buds-pill-icon',
-            });
-        } else {
-            icon = new St.Icon({
-                icon_name: `${iconId}-symbolic`,
-                icon_size: 18, style_class: 'buds-pill-icon',
-            });
-        }
+        let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
+            ? new St.Icon({ gicon: new Gio.FileIcon({ file: Gio.File.new_for_path(customPath) }), icon_size: 18, style_class: 'buds-pill-icon' })
+            : new St.Icon({ icon_name: `${iconId}-symbolic`, icon_size: 18, style_class: 'buds-pill-icon' });
 
         let btn = new St.Button({
             style_class: 'buds-pill-button',
@@ -329,23 +256,16 @@ class BudsIndicator extends PanelMenu.Button {
         btn._val = value;
         btn.connect('clicked', () => { if (!this._updating && this._proxy) cb(value); });
 
-        // Tooltip on hover
         let tipLabel = null;
         btn.connect('notify::hover', () => {
             if (btn.hover) {
                 if (!tipLabel) {
-                    tipLabel = new St.Label({
-                        text: tooltip,
-                        style_class: 'buds-tooltip',
-                    });
+                    tipLabel = new St.Label({ text: tooltip, style_class: 'buds-tooltip' });
                     Main.uiGroup.add_child(tipLabel);
                 }
                 let [x, y] = btn.get_transformed_position();
                 let bw = btn.get_width();
-                tipLabel.set_position(
-                    Math.round(x + bw / 2 - tipLabel.get_width() / 2),
-                    Math.round(y - tipLabel.get_height() - 6)
-                );
+                tipLabel.set_position(Math.round(x + bw / 2 - tipLabel.get_width() / 2), Math.round(y - tipLabel.get_height() - 6));
                 tipLabel.show();
             } else if (tipLabel) {
                 tipLabel.hide();
@@ -358,12 +278,11 @@ class BudsIndicator extends PanelMenu.Button {
         return btn;
     }
 
-    /* ── Build Menu ──────────────────────────────────────── */
+    /* ── Menu Construction ───────────────────────────────── */
     _buildMenu() {
         const P = PopupMenu;
         this.menu.actor.add_style_class_name('buds-menu-box');
 
-        // Automatic grab focus on menu open
         this.menu.connect('open-state-changed', (_menu, open) => {
             if (open) {
                 this._updateThemeClass();
@@ -374,7 +293,7 @@ class BudsIndicator extends PanelMenu.Button {
             }
         });
 
-        /* Battery */
+        /* Battery Telemetry Row */
         let bItem = new P.PopupBaseMenuItem({ reactive: false });
         let bBox  = new St.BoxLayout({ style_class: 'buds-battery-row', x_expand: true });
 
@@ -394,24 +313,23 @@ class BudsIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(bItem);
         this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
 
-        /* ── Noise Control ── */
+        /* Noise Control Section */
         this._addSectionTitle('Noise Control');
         let ncItem = new P.PopupBaseMenuItem({ reactive: false });
         let ncBox  = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._ncBtns = [];
-        [
+        this._ncBtns = [
             ['buds-noise-off', 0, 'Off'],
-            ['buds-anc',       1, 'Noise Cancellation'],
+            ['buds-anc', 1, 'Noise Cancellation'],
             ['buds-transparency', 2, 'Transparency'],
-        ].forEach(([ic, v, t]) => {
+        ].map(([ic, v, t]) => {
             let b = this._pill(ic, v, t, val => this._proxy.SetAncModeRemote(val));
             ncBox.add_child(b);
-            this._ncBtns.push(b);
+            return b;
         });
         ncItem.add_child(ncBox);
         this.menu.addMenuItem(ncItem);
 
-        /* Smart ANC toggle */
+        /* Smart ANC Switch */
         this._smartToggle = new P.PopupSwitchMenuItem('Smart Noise Cancelling', true);
         this._smartToggle.connect('toggled', (_, st) => {
             if (this._updating || !this._proxy) return;
@@ -421,7 +339,7 @@ class BudsIndicator extends PanelMenu.Button {
         this._ancSubRow = this._smartToggle;
         this.menu.addMenuItem(this._smartToggle);
 
-        /* ANC depth slider */
+        /* ANC Depth Slider */
         let slItem = new P.PopupBaseMenuItem({ reactive: false });
         let slBox  = new St.BoxLayout({ vertical: true, x_expand: true, style_class: 'buds-slider-box' });
         slBox.add_child(new St.Label({ text: 'Noise Cancelling Level', style_class: 'buds-slider-label' }));
@@ -438,20 +356,19 @@ class BudsIndicator extends PanelMenu.Button {
         this._sliderRow = slItem;
         this.menu.addMenuItem(slItem);
 
-        /* Transparency sub-modes */
+        /* Transparency Sub-modes */
         let trItem = new P.PopupBaseMenuItem({ reactive: false });
         let trVBox = new St.BoxLayout({ vertical: true, x_expand: true });
         trVBox.add_child(new St.Label({ text: 'Transparency Level', style_class: 'buds-slider-label' }));
         let trBox = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._transBtns = [];
-        [
+        this._transBtns = [
             ['buds-transparency', 2, 'Regular'],
-            ['buds-voice',       0, 'Enhanced Voice'],
-            ['buds-ambience',    1, 'Enhanced Ambience'],
-        ].forEach(([ic, v, t]) => {
+            ['buds-voice', 0, 'Enhanced Voice'],
+            ['buds-ambience', 1, 'Enhanced Ambience'],
+        ].map(([ic, v, t]) => {
             let b = this._pill(ic, v, t, val => this._proxy.SetTransparencySubmodeRemote(val));
             trBox.add_child(b);
-            this._transBtns.push(b);
+            return b;
         });
         trVBox.add_child(trBox);
         trItem.add_child(trVBox);
@@ -460,43 +377,41 @@ class BudsIndicator extends PanelMenu.Button {
 
         this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
 
-        /* ── Immersive Commute ── */
+        /* Immersive Commute Section */
         this._addSectionTitle('Immersive Commute');
         let cmItem = new P.PopupBaseMenuItem({ reactive: false });
         let cmBox  = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._cmBtns = [];
-        [
-            ['buds-off',      0, 'Off'],
-            ['buds-train',    1, 'Train Sound'],
-            ['buds-transit',  2, 'Public Transit'],
+        this._cmBtns = [
+            ['buds-off', 0, 'Off'],
+            ['buds-train', 1, 'Train Sound'],
+            ['buds-transit', 2, 'Public Transit'],
             ['buds-airplane', 3, 'Airplane Engine'],
-        ].forEach(([ic, v, t]) => {
+        ].map(([ic, v, t]) => {
             let b = this._pill(ic, v, t, val => this._proxy.SetImmersiveCommuteRemote(val));
             cmBox.add_child(b);
-            this._cmBtns.push(b);
+            return b;
         });
         cmItem.add_child(cmBox);
         this.menu.addMenuItem(cmItem);
         this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
 
-        /* ── Spatial Audio ── */
+        /* Spatial Audio Section */
         this._addSectionTitle('Spatial Audio');
         let saItem = new P.PopupBaseMenuItem({ reactive: false });
         let saBox  = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._saBtns = [];
-        [
+        this._saBtns = [
             ['buds-noise-off', 0, 'Off (Stereo)'],
-            ['buds-dolby',     1, 'Dolby Audio'],
-            ['buds-xiaomi',    2, 'Xiaomi Immersive'],
-        ].forEach(([ic, v, t]) => {
+            ['buds-dolby', 1, 'Dolby Audio'],
+            ['buds-xiaomi', 2, 'Xiaomi Immersive'],
+        ].map(([ic, v, t]) => {
             let b = this._pill(ic, v, t, val => this._proxy.SetAudioModeRemote(val));
             saBox.add_child(b);
-            this._saBtns.push(b);
+            return b;
         });
         saItem.add_child(saBox);
         this.menu.addMenuItem(saItem);
 
-        /* Head Tracking */
+        /* Head Tracking Switch */
         this._headToggle = new P.PopupSwitchMenuItem('Head Tracking', false);
         this._headToggle.connect('toggled', (_, st) => {
             if (this._updating || !this._proxy) return;
@@ -508,10 +423,10 @@ class BudsIndicator extends PanelMenu.Button {
 
         this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
 
-        /* ── Device Settings ── */
+        /* Device Settings Section */
         this._addSectionTitle('Device Settings');
 
-        /* LE Mode (Low Latency) */
+        /* LE Mode Switch */
         this._leToggle = new P.PopupSwitchMenuItem('LE Mode (Low Latency)', false);
         this._leToggle.connect('toggled', (_, st) => {
             if (this._updating || !this._proxy) return;
@@ -520,7 +435,7 @@ class BudsIndicator extends PanelMenu.Button {
         this._setupKeyNav(this._leToggle);
         this.menu.addMenuItem(this._leToggle);
 
-        /* In-Ear Detection */
+        /* In-Ear Detection Switch */
         this._earToggle = new P.PopupSwitchMenuItem('In-Ear Detection', true);
         this._earToggle.connect('toggled', (_, st) => {
             if (this._updating || !this._proxy) return;
@@ -529,7 +444,7 @@ class BudsIndicator extends PanelMenu.Button {
         this._setupKeyNav(this._earToggle);
         this.menu.addMenuItem(this._earToggle);
 
-        /* Initial visibility */
+        /* Initial Visibility */
         this._ancSubRow.visible = false;
         this._sliderRow.visible = false;
         this._transRow.visible  = false;
@@ -543,13 +458,15 @@ class BudsIndicator extends PanelMenu.Button {
     }
 
     destroy() {
-        if (this._proxy && this._signalId)
+        if (this._proxy && this._signalId) {
             this._proxy.disconnectSignal(this._signalId);
+            this._signalId = 0;
+        }
         super.destroy();
     }
 });
 
-/* ─── Extension ─────────────────────────────────────────── */
+/* ─── Main Extension Entry Point ─────────────────────────── */
 export default class BudsExtension extends Extension {
     enable() {
         this._indicator = new BudsIndicator(this.path);

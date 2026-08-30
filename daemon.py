@@ -1,39 +1,48 @@
-import socket
+"""
+Redmi Buds 8 Pro Control Daemon
+High-efficiency background service for Xiaomi Vela OS M-BAP over RFCOMM Channel 28.
+Exposes org.redmibuds8.Control D-Bus IPC service.
+"""
+
 import logging
 import signal
+import socket
 import time
 import json
+from threading import Thread, Lock
+
 import dbus
 import dbus.service
 import dbus.mainloop.glib
-from threading import Thread, Lock
-
 from dasbus.connection import SessionMessageBus
 from dasbus.server.interface import dbus_interface, dbus_signal
 from dasbus.typing import Int, Bool, Str
 from dasbus.loop import EventLoop
 from gi.repository import GLib
 
-MAC_ADDRESS     = "B8:53:84:F3:D7:D0"
-RFCOMM_PORT     = 28
-XIAOMI_UUID     = "00001101-0000-1000-8000-00805f9b34fb"  # SPP
-PROFILE_PATH    = "/org/redmibuds8/profile"
-DBUS_SERVICE    = "org.redmibuds8.Control"
-DBUS_PATH       = "/org/redmibuds8/Control"
+MAC_ADDRESS  = "B8:53:84:F3:D7:D0"
+RFCOMM_PORT  = 28
+XIAOMI_UUID  = "00001101-0000-1000-8000-00805f9b34fb"  # SPP
+PROFILE_PATH = "/org/redmibuds8/profile"
+DBUS_SERVICE = "org.redmibuds8.Control"
+DBUS_PATH    = "/org/redmibuds8/Control"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger("redmibuds8")
 
 
 class BudsConnection:
+    """Manages RFCOMM socket communication and Vela OS packet serialization."""
+
     def __init__(self, state_callback=None):
         self.sock           = None
         self.seq            = 0
         self.connected      = False
         self.lock           = Lock()
         self.state_callback = state_callback
+        self._status_timer  = None
 
-        # State storage
+        # State cache
         self.battery_left   = -1
         self.battery_right  = -1
         self.battery_case   = -1
@@ -41,22 +50,20 @@ class BudsConnection:
         self.charging_right = False
         self.charging_case  = False
 
-        self.anc_mode       = 0  # 0: Off, 1: ANC, 2: Transparency
-        self.anc_depth      = 0  # 0: Smart, 1: Deep, 2: Balanced, 3: Light
-        self.trans_submode  = 2  # 0: Enhanced Voice, 1: Enhanced Ambience, 2: Regular
+        self.anc_mode       = 0   # 0: Off, 1: ANC, 2: Transparency
+        self.anc_depth      = 0   # 0: Smart, 1: Deep, 2: Balanced, 3: Light
+        self.trans_submode  = 2   # 0: Voice, 1: Ambience, 2: Regular
 
-        self.eq_mode        = 1  # 1: Standard, 2: Music, 3: Video, 4: Game, 5: Books
-        self.commute_mode   = 0  # 0: Off, 1: Train, 2: Transit, 3: Airplane
+        self.eq_mode        = 1   # 1: Standard, 2: Music, 3: Video, 4: Game, 5: Books
+        self.commute_mode   = 0   # 0: Off, 1: Train, 2: Transit, 3: Airplane
 
         self.in_ear_det     = True
-        self.audio_mode     = 0  # 0: Off, 1: Dolby, 2: Xiaomi Immersive
+        self.audio_mode     = 0   # 0: Off, 1: Dolby, 2: Xiaomi Immersive
         self.head_tracking  = False
         self.le_mode        = False
 
-        self._status_timer  = None
-
     def get_state_dict(self):
-        """Return full state as a dictionary for the StateChanged signal."""
+        """Return full telemetry dictionary for D-Bus StateChanged signal."""
         return {
             'connected': self.connected,
             'battery_left': self.battery_left,
@@ -81,7 +88,7 @@ class BudsConnection:
             GLib.idle_add(self.state_callback)
 
     def is_bluez_connected(self, system_bus):
-        """Check if BlueZ actually has an active Bluetooth connection to the earbuds."""
+        """Check if BlueZ reports an active Bluetooth connection to the earbuds."""
         try:
             dev_path = f"/org/bluez/hci0/dev_{MAC_ADDRESS.replace(':', '_')}"
             dev_obj = system_bus.get_object("org.bluez", dev_path)
@@ -91,9 +98,8 @@ class BudsConnection:
             return False
 
     def connect_loop(self, system_bus):
-        """Event-driven RFCOMM connect loop that ONLY connects when BlueZ is connected to the laptop."""
+        """Event-driven RFCOMM loop: connects ONLY when BlueZ is actively paired/connected."""
         while True:
-            # Check if earbuds are connected to laptop via BlueZ
             if not self.is_bluez_connected(system_bus):
                 was_connected = False
                 with self.lock:
@@ -113,14 +119,12 @@ class BudsConnection:
                     self._stop_periodic_query()
                     self.notify_state_change()
                     log.info("Earbuds disconnected in BlueZ. Sleeping RFCOMM without polling.")
-                # Idle quietly without sending ANY Bluetooth radio packets
                 time.sleep(3)
                 continue
 
-            # Earbuds are connected to laptop in BlueZ! Connect RFCOMM if not already connected
             if not self.connected:
                 try:
-                    log.info(f"Earbuds connected to laptop. Opening RFCOMM to {MAC_ADDRESS}:{RFCOMM_PORT}...")
+                    log.info(f"Earbuds active in BlueZ. Connecting RFCOMM {MAC_ADDRESS}:{RFCOMM_PORT}...")
                     s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
                     s.settimeout(8)
                     s.connect((MAC_ADDRESS, RFCOMM_PORT))
@@ -143,13 +147,12 @@ class BudsConnection:
                         self.sock = None
                     self._stop_periodic_query()
                     self.notify_state_change()
-                    log.warning(f"RFCOMM connection attempt failed: {e}. Waiting 5 seconds...")
+                    log.warning(f"RFCOMM connection attempt failed: {e}. Retrying in 5s...")
                     time.sleep(5)
             else:
                 time.sleep(2)
 
     def _start_periodic_query(self):
-        """Periodic status query every 30 seconds to keep battery and state fresh without overwhelming RFCOMM."""
         def _do_query():
             if self.connected:
                 self.query_status()
@@ -163,7 +166,7 @@ class BudsConnection:
             self._status_timer = None
 
     def accept_connection(self, fd: int):
-        """Accept an inbound connection handed off by BlueZ profile."""
+        """Handle BlueZ Profile1 inbound connection handoff."""
         try:
             s = socket.fromfd(fd, socket.AF_BLUETOOTH, socket.SOCK_STREAM)
             with self.lock:
@@ -182,9 +185,7 @@ class BudsConnection:
             self.notify_state_change()
 
     def listen_loop(self):
-        # Query initial status upon connection
         GLib.idle_add(self.query_status)
-
         while self.connected:
             try:
                 data = self.sock.recv(1024)
@@ -201,62 +202,41 @@ class BudsConnection:
         self.notify_state_change()
 
     def query_status(self):
-        """Query status from earbuds to get live battery levels and settings."""
         if self.connected:
-            log.info("Querying device status...")
             self.send_cmd("0200", "ffffffff")
 
     def _parse_incoming(self, data: bytes):
-        """Parse packets using proper RFCOMM frame structure.
-
-        Each packet:  FE DC BA [type:1] [svc_h:1] [svc_l:1] [len:1] [seq:1] [payload:len-1] EF
-        Only C7 (notification) packets are parsed for state; 04 (ACK) packets are ignored
-        to prevent false-positive hex matches.
-        """
+        """Parse structured RFCOMM frames: FE DC BA [type] [svc:2] [len:1] [seq:1] [payload] EF."""
         state_changed = False
-
-        # Data may contain multiple concatenated packets
         i = 0
         while i < len(data) - 3:
-            # Look for packet header FE DC BA
-            if data[i] != 0xFE or data[i+1] != 0xDC or data[i+2] != 0xBA:
+            if data[i:i+3] != b'\xfe\xdc\xba':
                 i += 1
                 continue
 
-            # Need at least header(3) + type(1) + svc(2) + len(1) + seq(1) + footer(1) = 9 bytes
             if i + 8 > len(data):
                 break
 
             pkt_type = data[i + 3]
-            svc_h    = data[i + 4]
-            svc_l    = data[i + 5]
-            length   = data[i + 6]   # payload_len + 1 (for seq byte)
-            # seq    = data[i + 7]
-
+            svc      = (data[i + 4] << 8) | data[i + 5]
+            length   = data[i + 6]
             payload_len = length - 1
+
             if payload_len < 0:
                 i += 1
                 continue
 
-            pkt_end = i + 8 + payload_len  # position of EF footer
+            pkt_end = i + 8 + payload_len
             if pkt_end >= len(data):
-                # Incomplete packet, try raw battery fallback then stop
                 break
 
-            payload = data[i + 8 : i + 8 + payload_len]
-            svc = (svc_h << 8) | svc_l
-
-            log.info(f"Packet: type=0x{pkt_type:02X} svc=0x{svc:04X} len={length} payload={payload.hex()}")
-
-            # Only process notification/response (C7) packets
+            payload = data[i + 8 : pkt_end]
             if pkt_type == 0xC7:
                 state_changed |= self._handle_notification(svc, payload)
 
-            i = pkt_end + 1  # skip past EF footer
+            i = pkt_end + 1
 
-        # Fallback: scan for Battery Tag 04 07 [L] [R] [C] in the entire hex stream
-        # This handles compound status dumps where battery data may appear outside
-        # the standard packet structure.
+        # Check battery tag 04 07 [L] [R] [C]
         hex_data = data.hex()
         tag_pos = hex_data.find("0407")
         if tag_pos != -1 and len(hex_data) >= tag_pos + 10:
@@ -266,105 +246,68 @@ class BudsConnection:
             self.notify_state_change()
 
     def _handle_notification(self, svc, payload):
-        """Handle a properly parsed notification payload. Returns True if state changed."""
         changed = False
-
-        if svc == 0x0800 or svc == 0x0E00:
-            # Hardware service group – ANC mode & In-Ear Detection
-            if len(payload) >= 3 and payload[0] == 0x02 and payload[1] == 0x04:
-                mode = payload[2]
-                if mode in (0, 1, 2) and mode != self.anc_mode:
-                    self.anc_mode = mode
-                    log.info(f"ANC mode from device: {mode}")
+        if svc in (0x0800, 0x0E00):
+            if len(payload) >= 3 and payload[0] == 0x02:
+                if payload[1] == 0x04 and payload[2] in (0, 1, 2) and payload[2] != self.anc_mode:
+                    self.anc_mode = payload[2]
                     changed = True
-            if len(payload) >= 3 and payload[0] == 0x02 and payload[1] == 0x06:
-                val = bool(payload[2])
-                if val != self.in_ear_det:
-                    self.in_ear_det = val
-                    log.info(f"In-ear detection from device: {val}")
-                    changed = True
+                elif payload[1] == 0x06:
+                    val = bool(payload[2])
+                    if val != self.in_ear_det:
+                        self.in_ear_det = val
+                        changed = True
 
-        elif svc == 0xF200:
-            # Settings service group
-            if len(payload) >= 4:
-                # ANC Depth: 04 00 0B 01 [depth]
-                if payload[:4] == bytes([0x04, 0x00, 0x0B, 0x01]) and len(payload) >= 5:
-                    depth = payload[4]
-                    if depth in (0, 1, 2, 3) and depth != self.anc_depth:
-                        self.anc_depth = depth
-                        log.info(f"ANC depth from device: {depth}")
-                        changed = True
-                # Transparency Sub-mode: 04 00 0B 02 [sub]
-                elif payload[:4] == bytes([0x04, 0x00, 0x0B, 0x02]) and len(payload) >= 5:
-                    sub = payload[4]
-                    if sub in (0, 1, 2) and sub != self.trans_submode:
-                        self.trans_submode = sub
-                        log.info(f"Transparency sub-mode from device: {sub}")
-                        changed = True
-                # Audio mode: 03 00 1D [mode]
-                elif payload[:3] == bytes([0x03, 0x00, 0x1D]) and len(payload) >= 4:
-                    raw = payload[3]
-                    mode_map = {0x03: 0, 0x0A: 1, 0x0B: 2}
-                    mode = mode_map.get(raw)
-                    if mode is not None and mode != self.audio_mode:
-                        self.audio_mode = mode
-                        log.info(f"Audio mode from device: {mode}")
-                        changed = True
-                # Head tracking: 03 00 68 [val] (0x01=OFF, 0x00/0x02=ON)
-                elif payload[:3] == bytes([0x03, 0x00, 0x68]) and len(payload) >= 4:
-                    val = (payload[3] != 0x01)
-                    if val != self.head_tracking:
-                        self.head_tracking = val
-                        log.info(f"Head tracking from device: {val}")
-                        changed = True
-                # Commute mode: 03 00 67 [val]
-                elif payload[:3] == bytes([0x03, 0x00, 0x67]) and len(payload) >= 4:
-                    val = payload[3]
-                    if val in (0, 1, 2, 3) and val != self.commute_mode:
-                        self.commute_mode = val
-                        log.info(f"Commute mode from device: {val}")
-                        changed = True
-                # LE Mode / Low Latency: 03 00 28 [val] (0x00=ON, 0x01=OFF)
-                elif (payload[:3] == bytes([0x03, 0x00, 0x28]) or payload[:3] == bytes([0x03, 0x00, 0x07])) and len(payload) >= 4:
-                    val = (payload[3] == 0x00)
-                    if val != self.le_mode:
-                        self.le_mode = val
-                        log.info(f"LE mode from device: {val}")
-                        changed = True
+        elif svc == 0xF200 and len(payload) >= 4:
+            if payload[:4] == b'\x04\x00\x0b\x01' and len(payload) >= 5:
+                if payload[4] in (0, 1, 2, 3) and payload[4] != self.anc_depth:
+                    self.anc_depth = payload[4]
+                    changed = True
+            elif payload[:4] == b'\x04\x00\x0b\x02' and len(payload) >= 5:
+                if payload[4] in (0, 1, 2) and payload[4] != self.trans_submode:
+                    self.trans_submode = payload[4]
+                    changed = True
+            elif payload[:3] == b'\x03\x00\x1d':
+                mode = {0x03: 0, 0x0A: 1, 0x0B: 2}.get(payload[3])
+                if mode is not None and mode != self.audio_mode:
+                    self.audio_mode = mode
+                    changed = True
+            elif payload[:3] == b'\x03\x00\x68':
+                val = (payload[3] != 0x01)
+                if val != self.head_tracking:
+                    self.head_tracking = val
+                    changed = True
+            elif payload[:3] == b'\x03\x00\x67':
+                if payload[3] in (0, 1, 2, 3) and payload[3] != self.commute_mode:
+                    self.commute_mode = payload[3]
+                    changed = True
+            elif payload[:3] in (b'\x03\x00\x28', b'\x03\x00\x07'):
+                val = (payload[3] == 0x00)
+                if val != self.le_mode:
+                    self.le_mode = val
+                    changed = True
 
         return changed
 
     def _parse_battery(self, hex_data, tag_pos):
-        """Parse battery tag: 04 07 [L] [R] [C]."""
         try:
-            raw_l = int(hex_data[tag_pos + 4:tag_pos + 6], 16)
-            raw_r = int(hex_data[tag_pos + 6:tag_pos + 8], 16)
-            raw_c = int(hex_data[tag_pos + 8:tag_pos + 10], 16)
+            raw_l = int(hex_data[tag_pos + 4 : tag_pos + 6], 16)
+            raw_r = int(hex_data[tag_pos + 6 : tag_pos + 8], 16)
+            raw_c = int(hex_data[tag_pos + 8 : tag_pos + 10], 16)
 
-            def decode_bat(val):
-                if val == 0xFF:
+            def decode_bat(v):
+                if v == 0xFF:
                     return -1, False
-                level = val & 0x7F
-                charging = bool(val & 0x80)
-                return (level if level <= 100 else -1), charging
+                return (v & 0x7F if (v & 0x7F) <= 100 else -1), bool(v & 0x80)
 
             l_level, l_chg = decode_bat(raw_l)
             r_level, r_chg = decode_bat(raw_r)
             c_level, c_chg = decode_bat(raw_c)
 
-            changed = (l_level != self.battery_left or r_level != self.battery_right
-                       or c_level != self.battery_case)
-
-            self.battery_left   = l_level
-            self.battery_right  = r_level
-            self.battery_case   = c_level
-            self.charging_left  = l_chg
-            self.charging_right = r_chg
-            self.charging_case  = c_chg
-
-            log.info(f"Battery: L={self.battery_left}%{'⚡' if l_chg else ''} "
-                     f"R={self.battery_right}%{'⚡' if r_chg else ''} "
-                     f"C={self.battery_case}%{'⚡' if c_chg else ''}")
+            changed = (l_level != self.battery_left or r_level != self.battery_right or c_level != self.battery_case)
+            self.battery_left, self.charging_left   = l_level, l_chg
+            self.battery_right, self.charging_right = r_level, r_chg
+            self.battery_case, self.charging_case   = c_level, c_chg
             return changed
         except Exception as e:
             log.warning(f"Error parsing battery tag: {e}")
@@ -372,20 +315,15 @@ class BudsConnection:
 
     def send_cmd(self, svc_hex: str, payload_hex: str):
         if not self.connected or not self.sock:
-            log.warning("Cannot send command, not connected.")
             return False
-
         with self.lock:
             self.seq = (self.seq + 1) % 256
             seq_val = self.seq
 
-        length    = len(payload_hex) // 2 + 1
-        cmd_hex   = f"fedcbac4{svc_hex}{length:02x}{seq_val:02x}{payload_hex}ef"
-        cmd_bytes = bytes.fromhex(cmd_hex)
-
+        length = len(payload_hex) // 2 + 1
+        cmd_bytes = bytes.fromhex(f"fedcbac4{svc_hex}{length:02x}{seq_val:02x}{payload_hex}ef")
         try:
             self.sock.send(cmd_bytes)
-            log.info(f"Sent: {cmd_hex}")
             return True
         except Exception as e:
             log.warning(f"Failed to send command: {e}")
@@ -396,7 +334,6 @@ class BudsConnection:
 
 
 class XiaomiProfile(dbus.service.Object):
-    """BlueZ Profile1 implementation for inbound connections."""
     def __init__(self, bus, buds_conn: BudsConnection):
         super().__init__(bus, PROFILE_PATH)
         self._conn = buds_conn
@@ -407,14 +344,11 @@ class XiaomiProfile(dbus.service.Object):
 
     @dbus.service.method("org.bluez.Profile1", in_signature="oha{sv}", out_signature="")
     def NewConnection(self, path, fd, properties):
-        fd_int = int(fd)
-        log.info(f"BlueZ inbound connection from {path} fd={fd_int}")
-        t = Thread(target=self._conn.accept_connection, args=(fd_int,), daemon=True)
+        t = Thread(target=self._conn.accept_connection, args=(int(fd),), daemon=True)
         t.start()
 
     @dbus.service.method("org.bluez.Profile1", in_signature="o", out_signature="")
     def RequestDisconnection(self, path):
-        log.info(f"RequestDisconnection from {path}")
         self._conn.connected = False
         if self._conn.sock:
             try:
@@ -430,47 +364,37 @@ class BudsInterface:
 
     @dbus_signal
     def StateChanged(self, state_json: Str):
-        """Signal carrying full JSON state so the extension never reads stale cached properties."""
         pass
 
     def _emit_state(self):
-        """Build JSON state and emit StateChanged."""
-        state = json.dumps(self.conn.get_state_dict())
-        self.StateChanged(state)
+        self.StateChanged(json.dumps(self.conn.get_state_dict()))
 
-    # Methods
     def SetAncMode(self, mode: Int):
-        log.info(f"DBus call: SetAncMode({mode})")
         self.conn.anc_mode = mode
         self.conn.send_cmd("0800", f"0204{mode:02x}")
         self._emit_state()
 
     def SetAncDepth(self, depth: Int):
-        log.info(f"DBus call: SetAncDepth({depth})")
         self.conn.anc_depth = depth
         self.conn.send_cmd("f200", f"04000b01{depth:02x}")
         self._emit_state()
 
     def SetTransparencySubmode(self, submode: Int):
-        log.info(f"DBus call: SetTransparencySubmode({submode})")
         self.conn.trans_submode = submode
         self.conn.send_cmd("f200", f"04000b02{submode:02x}")
         self._emit_state()
 
     def SetEqMode(self, mode: Int):
-        log.info(f"DBus call: SetEqMode({mode})")
         self.conn.eq_mode = mode
         self.conn.send_cmd("f200", f"04003601{mode:02x}")
         self._emit_state()
 
     def SetImmersiveCommute(self, mode: Int):
-        log.info(f"DBus call: SetImmersiveCommute({mode})")
         self.conn.commute_mode = mode
         self.conn.send_cmd("f200", f"030067{mode:02x}")
         self._emit_state()
 
     def SetInEarDetection(self, enabled: Bool):
-        log.info(f"DBus call: SetInEarDetection({enabled})")
         self.conn.in_ear_det = enabled
         if enabled:
             self.conn.send_cmd("0800", "020601")
@@ -483,10 +407,8 @@ class BudsInterface:
         self._emit_state()
 
     def SetAudioMode(self, mode: Int):
-        log.info(f"DBus call: SetAudioMode({mode})")
         self.conn.audio_mode = mode
-        payload_map = {0: "03001d03", 1: "03001d0a", 2: "03001d0b"}
-        p = payload_map.get(mode, "03001d0a")
+        p = {0: "03001d03", 1: "03001d0a", 2: "03001d0b"}.get(mode, "03001d0a")
         self.conn.send_cmd("f200", p)
         if mode in (0, 1) and self.conn.head_tracking:
             self.conn.head_tracking = False
@@ -494,7 +416,6 @@ class BudsInterface:
         self._emit_state()
 
     def SetHeadTracking(self, enabled: Bool):
-        log.info(f"DBus call: SetHeadTracking({enabled})")
         self.conn.head_tracking = enabled
         if enabled:
             if self.conn.audio_mode != 2:
@@ -507,21 +428,16 @@ class BudsInterface:
         self._emit_state()
 
     def SetLeMode(self, enabled: Bool):
-        log.info(f"DBus call: SetLeMode({enabled})")
         self.conn.le_mode = enabled
         val = 0 if enabled else 1
         self.conn.send_cmd("f200", f"030028{val:02x}")
         self.conn.send_cmd("f200", f"030007{val:02x}")
         self._emit_state()
 
-    # Properties (kept for introspection / fallback)
+    # D-Bus Property accessors
     @property
     def Connected(self) -> Bool:
         return self.conn.connected
-
-    @property
-    def LeMode(self) -> Bool:
-        return self.conn.le_mode
 
     @property
     def BatteryLeft(self) -> Int:
@@ -567,6 +483,10 @@ class BudsInterface:
     def HeadTracking(self) -> Bool:
         return self.conn.head_tracking
 
+    @property
+    def LeMode(self) -> Bool:
+        return self.conn.le_mode
+
 
 def register_bluez_profile(system_bus, buds_conn: BudsConnection):
     profile_obj = XiaomiProfile(system_bus, buds_conn)
@@ -586,23 +506,21 @@ def register_bluez_profile(system_bus, buds_conn: BudsConnection):
 
 def main():
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-
     system_bus  = dbus.SystemBus()
     session_bus = SessionMessageBus()
 
-    buds_interface_holder = [None]
-
+    holder = [None]
     def on_state_change():
-        if buds_interface_holder[0]:
+        if holder[0]:
             try:
-                buds_interface_holder[0]._emit_state()
+                holder[0]._emit_state()
             except Exception as e:
                 log.warning(f"Error emitting StateChanged signal: {e}")
 
     buds_conn = BudsConnection(state_callback=on_state_change)
 
     try:
-        profile_obj = register_bluez_profile(system_bus, buds_conn)
+        register_bluez_profile(system_bus, buds_conn)
     except Exception as e:
         log.warning(f"Could not register BlueZ profile: {e}")
 
@@ -610,21 +528,19 @@ def main():
     conn_thread.start()
 
     interface = BudsInterface(buds_conn)
-    buds_interface_holder[0] = interface
+    holder[0] = interface
 
     session_bus.publish_object(DBUS_PATH, interface)
     session_bus.register_service(DBUS_SERVICE)
     log.info(f"D-Bus service registered as {DBUS_SERVICE}")
 
     loop = EventLoop()
-
     def on_shutdown(*_):
-        log.info("Shutting down.")
+        log.info("Shutting down daemon.")
         loop.quit()
 
     signal.signal(signal.SIGTERM, on_shutdown)
     signal.signal(signal.SIGINT,  on_shutdown)
-
     loop.run()
     session_bus.disconnect()
 
