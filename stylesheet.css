@@ -77,10 +77,12 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   DARK MODE: OBSIDIAN CHROME
+   DARK MODE: OBSIDIAN CHROME (Active when Dark mode chosen)
    Onyx: #0A0A0A | Blue Slate: #536878 | Alabaster Grey: #E5E4E2
    ═══════════════════════════════════════════════════════════ */
-.buds-menu-box .popup-menu-content {
+.buds-menu-box .popup-menu-content,
+.buds-menu-box.dark-theme .popup-menu-content,
+.popup-menu-content.dark-theme {
     background-color: #0A0A0A !important;
     border: none !important;
     border-radius: 20px !important;
@@ -90,126 +92,196 @@
 
 .buds-menu-box .buds-batt-icon,
 .buds-menu-box .buds-battery-value,
-.buds-menu-box .popup-menu-item {
+.buds-menu-box .popup-menu-item,
+.buds-menu-box.dark-theme .buds-batt-icon,
+.buds-menu-box.dark-theme .buds-battery-value,
+.buds-menu-box.dark-theme .popup-menu-item,
+.dark-theme .popup-menu-item {
     color: #E5E4E2 !important;
 }
 
 .buds-menu-box .buds-section-title,
-.buds-menu-box .buds-slider-label {
+.buds-menu-box .buds-slider-label,
+.buds-menu-box.dark-theme .buds-section-title,
+.buds-menu-box.dark-theme .buds-slider-label,
+.dark-theme .buds-section-title,
+.dark-theme .buds-slider-label {
     color: #536878 !important;
 }
 
-/* Dark Mode Inactive Pill Button (No static border) */
-.buds-menu-box .buds-pill-button {
+/* Dark Mode Inactive Pill Button */
+.buds-menu-box .buds-pill-button,
+.buds-menu-box.dark-theme .buds-pill-button,
+.dark-theme .buds-pill-button {
     background-color: rgba(83, 104, 120, 0.22) !important;
     border: none !important;
 }
 
-.buds-menu-box .buds-pill-button:hover {
+.buds-menu-box .buds-pill-button:hover,
+.buds-menu-box.dark-theme .buds-pill-button:hover,
+.dark-theme .buds-pill-button:hover {
     background-color: rgba(83, 104, 120, 0.45) !important;
 }
 
-.buds-menu-box .buds-pill-icon {
+.buds-menu-box .buds-pill-icon,
+.buds-menu-box.dark-theme .buds-pill-icon,
+.dark-theme .buds-pill-icon {
     color: #E5E4E2 !important;
 }
 
 /* Dark Mode Active Pill Button (Alabaster Grey fill, Onyx dark icon) */
-.buds-menu-box .buds-pill-button.active {
+.buds-menu-box .buds-pill-button.active,
+.buds-menu-box.dark-theme .buds-pill-button.active,
+.dark-theme .buds-pill-button.active {
     background-color: #E5E4E2 !important;
     border: none !important;
 }
 
-.buds-menu-box .buds-pill-button.active .buds-pill-icon {
+.buds-menu-box .buds-pill-button.active .buds-pill-icon,
+.buds-menu-box.dark-theme .buds-pill-button.active .buds-pill-icon,
+.dark-theme .buds-pill-button.active .buds-pill-icon {
     color: #0A0A0A !important;
 }
 
-/* KEYBOARD NAVIGATION FOCUS RING (Dark Mode) - Appears ONLY when focused via keyboard */
+/* Focus Ring (Dark Mode) */
 .buds-menu-box .buds-pill-button:focus,
-.buds-menu-box .popup-menu-item:focus {
+.buds-menu-box .popup-menu-item:focus,
+.buds-menu-box.dark-theme .buds-pill-button:focus,
+.buds-menu-box.dark-theme .popup-menu-item:focus,
+.dark-theme .buds-pill-button:focus,
+.dark-theme .popup-menu-item:focus {
     border: 2px solid #E5E4E2 !important;
     outline: none !important;
     background-color: rgba(83, 104, 120, 0.5) !important;
 }
 
-.buds-menu-box .buds-tooltip {
+.buds-menu-box .buds-tooltip,
+.buds-menu-box.dark-theme .buds-tooltip,
+.dark-theme .buds-tooltip {
     background-color: #0A0A0A !important;
     color: #E5E4E2 !important;
     border: none !important;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8) !important;
 }
 
-.buds-menu-box .popup-separator-menu-item-separator {
+.buds-menu-box .popup-separator-menu-item-separator,
+.buds-menu-box.dark-theme .popup-separator-menu-item-separator,
+.dark-theme .popup-separator-menu-item-separator {
     background-color: #536878 !important;
 }
 
-.buds-menu-box .toggle-switch:checked {
+.buds-menu-box .toggle-switch:checked,
+.buds-menu-box.dark-theme .toggle-switch:checked,
+.dark-theme .toggle-switch:checked {
     background-color: #536878 !important;
 }
 
 
 /* ═══════════════════════════════════════════════════════════
-   LIGHT MODE: SCARLET GLACIER
+   LIGHT MODE: SCARLET GLACIER (Active when White/Light mode chosen)
    Bright Snow: #FAFBFD | Periwinkle: #BFB4DC | Inferno: #AA0003
    ═══════════════════════════════════════════════════════════ */
-.buds-menu-box.light-theme .popup-menu-content {
+.buds-menu-box.light-theme .popup-menu-content,
+.buds-menu-box .popup-menu-content.light-theme,
+.popup-menu-content.light-theme,
+.light-theme.popup-menu-content {
     background-color: #FAFBFD !important;
     border: none !important;
+    border-radius: 20px !important;
+    padding: 10px 8px !important;
     box-shadow: 0 8px 24px rgba(170, 0, 3, 0.15) !important;
 }
 
 .buds-menu-box.light-theme .buds-batt-icon,
 .buds-menu-box.light-theme .buds-battery-value,
-.buds-menu-box.light-theme .popup-menu-item {
+.buds-menu-box.light-theme .popup-menu-item,
+.buds-menu-box .popup-menu-content.light-theme .buds-batt-icon,
+.buds-menu-box .popup-menu-content.light-theme .buds-battery-value,
+.buds-menu-box .popup-menu-content.light-theme .popup-menu-item,
+.light-theme .buds-batt-icon,
+.light-theme .buds-battery-value,
+.light-theme .popup-menu-item {
     color: #AA0003 !important;
 }
 
 .buds-menu-box.light-theme .buds-section-title,
-.buds-menu-box.light-theme .buds-slider-label {
+.buds-menu-box.light-theme .buds-slider-label,
+.buds-menu-box .popup-menu-content.light-theme .buds-section-title,
+.buds-menu-box .popup-menu-content.light-theme .buds-slider-label,
+.light-theme .buds-section-title,
+.light-theme .buds-slider-label {
     color: #AA0003 !important;
 }
 
-/* Light Mode Inactive Pill Button (No static border) */
-.buds-menu-box.light-theme .buds-pill-button {
+/* Light Mode Inactive Pill Button (Periwinkle #BFB4DC fill, Inferno #AA0003 icon) */
+.buds-menu-box.light-theme .buds-pill-button,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button,
+.light-theme .buds-pill-button {
     background-color: #BFB4DC !important;
     border: none !important;
 }
 
-.buds-menu-box.light-theme .buds-pill-button:hover {
+.buds-menu-box.light-theme .buds-pill-button:hover,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button:hover,
+.light-theme .buds-pill-button:hover {
     background-color: rgba(191, 180, 220, 0.85) !important;
 }
 
-.buds-menu-box.light-theme .buds-pill-icon {
+.buds-menu-box.light-theme .buds-pill-icon,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-icon,
+.light-theme .buds-pill-icon {
     color: #AA0003 !important;
 }
 
-/* Light Mode Active Pill Button (Inferno fill, Bright Snow icon) */
-.buds-menu-box.light-theme .buds-pill-button.active {
+/* Light Mode Active Pill Button (Inferno #AA0003 fill, Bright Snow #FAFBFD icon) */
+.buds-menu-box.light-theme .buds-pill-button.active,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button.active,
+.light-theme .buds-pill-button.active {
     background-color: #AA0003 !important;
     border: none !important;
 }
 
-.buds-menu-box.light-theme .buds-pill-button.active .buds-pill-icon {
+.buds-menu-box.light-theme .buds-pill-button.active .buds-pill-icon,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button.active .buds-pill-icon,
+.light-theme .buds-pill-button.active .buds-pill-icon {
     color: #FAFBFD !important;
 }
 
-/* KEYBOARD NAVIGATION FOCUS RING (Light Mode) - Appears ONLY when focused via keyboard */
+/* Focus Ring (Light Mode) */
 .buds-menu-box.light-theme .buds-pill-button:focus,
-.buds-menu-box.light-theme .popup-menu-item:focus {
+.buds-menu-box.light-theme .popup-menu-item:focus,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button:focus,
+.buds-menu-box .popup-menu-content.light-theme .popup-menu-item:focus,
+.light-theme .buds-pill-button:focus,
+.light-theme .popup-menu-item:focus {
     border: 2px solid #AA0003 !important;
     outline: none !important;
+    background-color: rgba(191, 180, 220, 0.5) !important;
 }
 
-.buds-menu-box.light-theme .buds-tooltip {
+.buds-menu-box.light-theme .buds-tooltip,
+.buds-menu-box .popup-menu-content.light-theme .buds-tooltip,
+.light-theme .buds-tooltip {
     background-color: #FAFBFD !important;
     color: #AA0003 !important;
     border: none !important;
     box-shadow: 0 4px 14px rgba(170, 0, 3, 0.2) !important;
 }
 
-.buds-menu-box.light-theme .popup-separator-menu-item-separator {
+.buds-menu-box.light-theme .popup-separator-menu-item-separator,
+.buds-menu-box .popup-menu-content.light-theme .popup-separator-menu-item-separator,
+.light-theme .popup-separator-menu-item-separator {
     background-color: #BFB4DC !important;
 }
 
-.buds-menu-box.light-theme .toggle-switch:checked {
+.buds-menu-box.light-theme .toggle-switch,
+.buds-menu-box .popup-menu-content.light-theme .toggle-switch,
+.light-theme .toggle-switch {
+    background-color: #BFB4DC !important;
+}
+
+.buds-menu-box.light-theme .toggle-switch:checked,
+.buds-menu-box .popup-menu-content.light-theme .toggle-switch:checked,
+.light-theme .toggle-switch:checked {
     background-color: #AA0003 !important;
 }

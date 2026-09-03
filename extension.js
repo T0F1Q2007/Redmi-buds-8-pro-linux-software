@@ -51,6 +51,14 @@ class BudsIndicator extends PanelMenu.Button {
         this._signalId = 0;
         this._updating = false;
 
+        this._interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+        this._themeChangedId = this._interfaceSettings.connect('changed::color-scheme', () => {
+            this._updateThemeClass();
+        });
+        this._gtkThemeChangedId = this._interfaceSettings.connect('changed::gtk-theme', () => {
+            this._updateThemeClass();
+        });
+
         this._icon = new St.Icon({
             icon_name: 'audio-headphones-symbolic',
             style_class: 'system-status-icon',
@@ -90,16 +98,36 @@ class BudsIndicator extends PanelMenu.Button {
         }
     }
 
-    _updateThemeClass() {
+    _isLightMode() {
         try {
-            let interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
-            let isLight = (interfaceSettings.get_string('color-scheme') === 'prefer-light');
-            if (isLight) {
-                this.menu.actor.add_style_class_name('light-theme');
-            } else {
-                this.menu.actor.remove_style_class_name('light-theme');
-            }
-        } catch (_) {}
+            let scheme = this._interfaceSettings ? this._interfaceSettings.get_string('color-scheme') : 'default';
+            // In GNOME: 'prefer-dark' is dark mode; 'default' or 'prefer-light' is light mode
+            if (scheme === 'prefer-dark')
+                return false;
+            if (scheme === 'prefer-light' || scheme === 'default')
+                return true;
+
+            // Fallback for custom GTK themes
+            let gtkTheme = (this._interfaceSettings ? this._interfaceSettings.get_string('gtk-theme') : '').toLowerCase();
+            return !gtkTheme.includes('dark');
+        } catch (_) {
+            return false;
+        }
+    }
+
+    _updateThemeClass() {
+        let isLight = this._isLightMode();
+        let addClass = isLight ? 'light-theme' : 'dark-theme';
+        let removeClass = isLight ? 'dark-theme' : 'light-theme';
+
+        if (this.menu && this.menu.actor) {
+            this.menu.actor.remove_style_class_name(removeClass);
+            this.menu.actor.add_style_class_name(addClass);
+        }
+        if (this.menu && this.menu.box) {
+            this.menu.box.remove_style_class_name(removeClass);
+            this.menu.box.add_style_class_name(addClass);
+        }
     }
 
     _refreshUI() {
@@ -282,6 +310,8 @@ class BudsIndicator extends PanelMenu.Button {
     _buildMenu() {
         const P = PopupMenu;
         this.menu.actor.add_style_class_name('buds-menu-box');
+        this.menu.box.add_style_class_name('buds-menu-box');
+        this._updateThemeClass();
 
         this.menu.connect('open-state-changed', (_menu, open) => {
             if (open) {
@@ -458,6 +488,17 @@ class BudsIndicator extends PanelMenu.Button {
     }
 
     destroy() {
+        if (this._interfaceSettings) {
+            if (this._themeChangedId) {
+                this._interfaceSettings.disconnect(this._themeChangedId);
+                this._themeChangedId = 0;
+            }
+            if (this._gtkThemeChangedId) {
+                this._interfaceSettings.disconnect(this._gtkThemeChangedId);
+                this._gtkThemeChangedId = 0;
+            }
+            this._interfaceSettings = null;
+        }
         if (this._proxy && this._signalId) {
             this._proxy.disconnectSignal(this._signalId);
             this._signalId = 0;
