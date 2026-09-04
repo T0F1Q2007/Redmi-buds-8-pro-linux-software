@@ -9,7 +9,6 @@ import signal
 import socket
 import time
 import json
-import subprocess
 from threading import Thread, Lock
 
 import dbus
@@ -443,18 +442,6 @@ class BudsInterface:
         val = 0 if enabled else 1
         self.conn.send_cmd("f200", f"030028{val:02x}")
         self.conn.send_cmd("f200", f"030007{val:02x}")
-
-        # Automatically synchronize PipeWire Bluetooth A2DP profile:
-        # When LE mode is enabled: switch to a2dp-auto-prefer-latency (low-buffer SBC to prevent earbud buffer underruns)
-        # When LE mode is disabled: switch back to a2dp-auto-prefer-quality (high-fidelity AAC / LHDC)
-        target_profile = "a2dp-auto-prefer-latency" if enabled else "a2dp-auto-prefer-quality"
-        try:
-            subprocess.run(["pactl", "set-card-profile", "bluez_card.B8_53_84_F3_D7_D0", target_profile],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            log.info(f"Synchronized PipeWire A2DP profile to: {target_profile}")
-        except Exception as e:
-            log.warning(f"Failed to synchronize PipeWire profile: {e}")
-
         self._emit_state()
 
     def SetDualConnection(self, enabled: Bool):
