@@ -191,6 +191,7 @@ class BudsConnection:
                 data = self.sock.recv(1024)
                 if not data:
                     break
+                log.info(f"Received from earbuds: {data.hex()}")
                 self._parse_incoming(data)
             except Exception as e:
                 log.warning(f"Error reading socket: {e}")
@@ -324,6 +325,7 @@ class BudsConnection:
         cmd_bytes = bytes.fromhex(f"fedcbac4{svc_hex}{length:02x}{seq_val:02x}{payload_hex}ef")
         try:
             self.sock.send(cmd_bytes)
+            log.info(f"Sent command: {cmd_bytes.hex()}")
             return True
         except Exception as e:
             log.warning(f"Failed to send command: {e}")
@@ -428,6 +430,7 @@ class BudsInterface:
         self._emit_state()
 
     def SetLeMode(self, enabled: Bool):
+        log.info(f"DBus SetLeMode({enabled})")
         self.conn.le_mode = enabled
         val = 0 if enabled else 1
         self.conn.send_cmd("f200", f"030028{val:02x}")

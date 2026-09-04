@@ -461,6 +461,11 @@ class BudsIndicator extends PanelMenu.Button {
         this._leToggle.connect('toggled', (_, st) => {
             if (this._updating || !this._proxy) return;
             this._proxy.SetLeModeRemote(st);
+            let soundFile = st ? 'le_on.wav' : 'le_off.wav';
+            let soundPath = GLib.build_filenamev([this._extensionPath, 'sounds', soundFile]);
+            if (GLib.file_test(soundPath, GLib.FileTest.EXISTS)) {
+                GLib.spawn_command_line_async(`paplay "${soundPath}"`);
+            }
         });
         this._setupKeyNav(this._leToggle);
         this.menu.addMenuItem(this._leToggle);
