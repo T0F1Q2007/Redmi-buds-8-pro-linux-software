@@ -1,7 +1,7 @@
 #!/bin/bash
-# LHDC Audio Buffer & Quality Stabilization Fix for PipeWire / WirePlumber
-# Solves dynamic bitrate hunting, restores Headset with Mic,
-# and allows true low-latency scaling during LE Mode.
+# Dual-Mode Bluetooth Audio Configuration for PipeWire / WirePlumber
+# Supports both Classic High Fidelity (LHDC v5 / AAC) and LE Audio (BAP with LC3)
+# alongside Headset with Microphone (HFP/mSBC).
 
 WP_CONF_DIR="$HOME/.config/wireplumber/wireplumber.conf.d"
 mkdir -p "$WP_CONF_DIR"
@@ -11,15 +11,15 @@ monitor.bluez.properties = {
   # Force Constant Quality mode for LHDC to prevent dynamic ABR bitrate swings
   bluez5.a2dp.lhdc-quality = "cq"
 
-  # Enable both High Fidelity Playback (A2DP) and Headset with Mic (HFP/HSP)
-  bluez5.roles = [ a2dp_sink a2dp_source hsp_hs hsp_ag hfp_hf hfp_ag ]
+  # Enable High Fidelity Media (A2DP), LE Audio (BAP with LC3), and Headset (HFP)
+  bluez5.roles = [ a2dp_sink a2dp_source bap_sink bap_source hsp_hs hsp_ag hfp_hf hfp_ag ]
+  bluez5.enable-lc3 = true
 
-  # Prevent automatic headset profile switching so music stays in high fidelity A2DP
+  # Prevent automatic headset profile switching so music stays in high fidelity
   bluez5.autoswitch-to-headset-profile = false
 }
 
-# Prevent Bluetooth node from sleeping to eliminate initial wake-up audio clipping,
-# while allowing PipeWire to scale latency dynamically between Quality and Latency profiles.
+# Prevent Bluetooth node from sleeping to eliminate initial wake-up audio clipping
 monitor.bluez.rules = [
   {
     matches = [ { node.name = "~bluez_output.*" } ]
