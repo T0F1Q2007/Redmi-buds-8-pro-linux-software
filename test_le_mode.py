@@ -64,6 +64,7 @@ def main():
         try:
             connected = bool(props.Get("org.redmibuds8.Control", "Connected"))
             le_mode = bool(props.Get("org.redmibuds8.Control", "LeMode"))
+            dual_conn = bool(props.Get("org.redmibuds8.Control", "DualConnection"))
             batt_l = int(props.Get("org.redmibuds8.Control", "BatteryLeft"))
             batt_r = int(props.Get("org.redmibuds8.Control", "BatteryRight"))
             batt_c = int(props.Get("org.redmibuds8.Control", "BatteryCase"))
@@ -79,6 +80,7 @@ def main():
         print(f" [*] Battery Levels      : L: {batt_l if batt_l >= 0 else '--'}% | R: {batt_r if batt_r >= 0 else '--'}% | Case: {batt_c if batt_c >= 0 else '--'}%")
         print(f" [*] Noise Control       : {anc_str}")
         print(f" [*] Active Card Profile : {profile}")
+        print(f" [*] Dual Connection     : {'[ ACTIVE / ON ] (Multipoint Enabled)' if dual_conn else '[ INACTIVE / OFF ] (Single Device Only)'}")
         print(f" [*] LE / Low Latency    : {'[ ACTIVE / ON ] (Low DSP Buffer ~60ms)' if le_mode else '[ INACTIVE / OFF ] (Standard Media ~200ms)'}\n")
 
         print("---------------------------------------------------------------")
@@ -89,10 +91,11 @@ def main():
         print("   [4] Run Rapid Click Cadence Test (Transient delay test)")
         print("   [5] Switch to Casual Headphones (A2DP High Fidelity Media)")
         print("   [6] Switch to Headset with Mic (HFP Hands-Free + Microphone)")
+        print("   [7] Toggle Dual Connection (Multipoint ON/OFF)")
         print("   [q] Quit")
         print("---------------------------------------------------------------")
 
-        choice = input("Enter option [1-6, q]: ").strip().lower()
+        choice = input("Enter option [1-7, q]: ").strip().lower()
 
         if choice == "1":
             print("\n>> Switching to Low Latency (LE Mode ON)...")
@@ -140,6 +143,12 @@ def main():
             print("\nSwitching to Headset with Microphone (HFP/mSBC)...")
             subprocess.run(["pactl", "set-card-profile", "bluez_card.B8_53_84_F3_D7_D0", "headset-head-unit"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print("Profile set to Headset Head Unit (Microphone active).")
+            time.sleep(1)
+        elif choice == "7":
+            new_val = not dual_conn
+            print(f"\n>> Switching Dual Connection (Multipoint) to: {'ON' if new_val else 'OFF'}...")
+            ctrl.SetDualConnection(new_val)
+            print(">> Command sent to firmware.")
             time.sleep(1)
         elif choice == "q":
             print("Exiting.")

@@ -26,6 +26,7 @@ const DBusProxy = Gio.DBusProxy.makeProxyWrapper(`
         <method name="SetAudioMode"><arg type="i" name="mode" direction="in"/></method>
         <method name="SetHeadTracking"><arg type="b" name="enabled" direction="in"/></method>
         <method name="SetLeMode"><arg type="b" name="enabled" direction="in"/></method>
+        <method name="SetDualConnection"><arg type="b" name="enabled" direction="in"/></method>
         <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
     </interface>
 </node>
@@ -37,7 +38,7 @@ let _s = {
     charging_left: false, charging_right: false, charging_case: false,
     anc_mode: 0, anc_depth: 0, trans_submode: 2, eq_mode: 1,
     commute_mode: 0, in_ear_det: true, audio_mode: 0, head_tracking: false,
-    le_mode: false,
+    le_mode: false, dual_connect: true,
 };
 
 /* ─── Indicator Button & Menu ────────────────────────────── */
@@ -159,6 +160,7 @@ class BudsIndicator extends PanelMenu.Button {
             this._htRow.visible = (_s.audio_mode === 2);
             this._headToggle.setToggleState(_s.head_tracking);
             this._leToggle.setToggleState(_s.le_mode);
+            this._dualToggle.setToggleState(_s.dual_connect);
             this._earToggle.setToggleState(_s.in_ear_det);
         } catch (e) {
             console.error('Refresh error:', e);
@@ -183,6 +185,7 @@ class BudsIndicator extends PanelMenu.Button {
         rows.push(this._saBtns);
         if (this._htRow && this._htRow.visible) rows.push([this._headToggle]);
         rows.push([this._leToggle]);
+        rows.push([this._dualToggle]);
         rows.push([this._earToggle]);
         return rows;
     }
@@ -469,6 +472,15 @@ class BudsIndicator extends PanelMenu.Button {
         });
         this._setupKeyNav(this._leToggle);
         this.menu.addMenuItem(this._leToggle);
+
+        /* Dual Connection (Multipoint) Switch */
+        this._dualToggle = new P.PopupSwitchMenuItem('Dual Connection', true);
+        this._dualToggle.connect('toggled', (_, st) => {
+            if (this._updating || !this._proxy) return;
+            this._proxy.SetDualConnectionRemote(st);
+        });
+        this._setupKeyNav(this._dualToggle);
+        this.menu.addMenuItem(this._dualToggle);
 
         /* In-Ear Detection Switch */
         this._earToggle = new P.PopupSwitchMenuItem('In-Ear Detection', true);

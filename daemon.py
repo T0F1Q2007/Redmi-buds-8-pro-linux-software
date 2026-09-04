@@ -61,6 +61,7 @@ class BudsConnection:
         self.audio_mode     = 0   # 0: Off, 1: Dolby, 2: Xiaomi Immersive
         self.head_tracking  = False
         self.le_mode        = False
+        self.dual_connect   = True
 
     def get_state_dict(self):
         """Return full telemetry dictionary for D-Bus StateChanged signal."""
@@ -81,6 +82,7 @@ class BudsConnection:
             'audio_mode': self.audio_mode,
             'head_tracking': self.head_tracking,
             'le_mode': self.le_mode,
+            'dual_connect': self.dual_connect,
         }
 
     def notify_state_change(self):
@@ -287,6 +289,11 @@ class BudsConnection:
                 if val != self.le_mode:
                     self.le_mode = val
                     changed = True
+            elif payload[:3] == b'\x03\x00\x04':
+                val = bool(payload[3])
+                if val != self.dual_connect:
+                    self.dual_connect = val
+                    changed = True
 
         return changed
 
@@ -437,10 +444,21 @@ class BudsInterface:
         self.conn.send_cmd("f200", f"030007{val:02x}")
         self._emit_state()
 
+    def SetDualConnection(self, enabled: Bool):
+        log.info(f"DBus SetDualConnection({enabled})")
+        self.conn.dual_connect = enabled
+        val = 1 if enabled else 0
+        self.conn.send_cmd("f200", f"030004{val:02x}")
+        self._emit_state()
+
     # D-Bus Property accessors
     @property
     def Connected(self) -> Bool:
         return self.conn.connected
+
+    @property
+    def DualConnection(self) -> Bool:
+        return self.conn.dual_connect
 
     @property
     def BatteryLeft(self) -> Int:
