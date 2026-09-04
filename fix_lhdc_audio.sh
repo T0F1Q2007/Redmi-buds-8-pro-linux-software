@@ -1,7 +1,7 @@
 #!/bin/bash
 # LHDC Audio Buffer & Quality Stabilization Fix for PipeWire / WirePlumber
-# Solves dynamic bitrate hunting and keeps both Casual Headphones (A2DP/LHDC)
-# and Headset with Microphone (HFP/mSBC) available.
+# Solves dynamic bitrate hunting, restores Headset with Mic,
+# and allows true low-latency scaling during LE Mode.
 
 WP_CONF_DIR="$HOME/.config/wireplumber/wireplumber.conf.d"
 mkdir -p "$WP_CONF_DIR"
@@ -18,15 +18,13 @@ monitor.bluez.properties = {
   bluez5.autoswitch-to-headset-profile = false
 }
 
-# Increase internal buffer size for Bluetooth A2DP streams to reduce
-# underrun-triggered audio spikes during codec processing peaks.
+# Prevent Bluetooth node from sleeping to eliminate initial wake-up audio clipping,
+# while allowing PipeWire to scale latency dynamically between Quality and Latency profiles.
 monitor.bluez.rules = [
   {
     matches = [ { node.name = "~bluez_output.*" } ]
     actions = {
       update-props = {
-        api.alsa.headroom       = 8192
-        node.latency            = "2048/48000"
         session.suspend-timeout-seconds = 0
       }
     }
