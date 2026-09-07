@@ -41,7 +41,194 @@ let _s = {
     le_mode: false, dual_connect: true,
 };
 
-/* ─── Indicator Button & Menu ────────────────────────────── */
+/* ─── Declarative Features Schema ────────────────────────── */
+const FEATURES = [
+    {
+        id: 'noise_control',
+        title: 'Noise Control',
+        type: 'pill_group',
+        get: s => s.anc_mode,
+        set: (proxy, val) => proxy.SetAncModeRemote(val),
+        items: [
+            { icon: 'buds-noise-off', value: 0, title: 'Off' },
+            { icon: 'buds-anc', value: 1, title: 'Noise Cancellation' },
+            { icon: 'buds-transparency', value: 2, title: 'Transparency' },
+        ],
+        subControls: [
+            {
+                id: 'smart_anc',
+                type: 'switch',
+                label: 'Smart Noise Cancelling',
+                condition: s => s.anc_mode === 1,
+                get: s => s.anc_depth === 0,
+                set: (proxy, st) => proxy.SetAncDepthRemote(st ? 0 : 2),
+            },
+            {
+                id: 'anc_depth_slider',
+                type: 'slider',
+                label: 'Noise Cancelling Level',
+                condition: s => s.anc_mode === 1 && s.anc_depth !== 0,
+                get: s => ({ 1: 1.0, 2: 0.5, 3: 0.0 }[s.anc_depth] ?? 0.5),
+                set: (proxy, v) => {
+                    let d = v < 0.25 ? 3 : v < 0.75 ? 2 : 1;
+                    proxy.SetAncDepthRemote(d);
+                },
+            },
+            {
+                id: 'transparency_submodes',
+                type: 'pill_group',
+                label: 'Transparency Level',
+                condition: s => s.anc_mode === 2,
+                get: s => s.trans_submode,
+                set: (proxy, val) => proxy.SetTransparencySubmodeRemote(val),
+                items: [
+                    { icon: 'buds-transparency', value: 2, title: 'Regular' },
+                    { icon: 'buds-voice', value: 0, title: 'Enhanced Voice' },
+                    { icon: 'buds-ambience', value: 1, title: 'Enhanced Ambience' },
+                ],
+            },
+        ],
+    },
+    {
+        id: 'commute_mode',
+        title: 'Immersive Commute',
+        type: 'pill_group',
+        get: s => s.commute_mode,
+        set: (proxy, val) => proxy.SetImmersiveCommuteRemote(val),
+        items: [
+            { icon: 'buds-off', value: 0, title: 'Off' },
+            { icon: 'buds-train', value: 1, title: 'Train Sound' },
+            { icon: 'buds-transit', value: 2, title: 'Public Transit' },
+            { icon: 'buds-airplane', value: 3, title: 'Airplane Engine' },
+        ],
+    },
+    {
+        id: 'spatial_audio',
+        title: 'Spatial Audio',
+        type: 'pill_group',
+        get: s => s.audio_mode,
+        set: (proxy, val) => proxy.SetAudioModeRemote(val),
+        items: [
+            { icon: 'buds-stereo', value: 0, title: 'Off (Stereo)' },
+            { icon: 'buds-dolby', value: 1, title: 'Dolby Audio' },
+            { icon: 'buds-xiaomi', value: 2, title: 'Xiaomi Immersive' },
+        ],
+        subControls: [
+            {
+                id: 'head_tracking',
+                type: 'switch',
+                label: 'Head Tracking',
+                condition: s => s.audio_mode === 2,
+                get: s => s.head_tracking,
+                set: (proxy, st) => proxy.SetHeadTrackingRemote(st),
+            },
+        ],
+    },
+    {
+        id: 'device_settings',
+        title: 'Device Settings',
+        type: 'switches',
+        items: [
+            {
+                id: 'le_mode',
+                label: 'LE Mode (Low Latency)',
+                get: s => s.le_mode,
+                set: (proxy, st, ctx) => {
+                    proxy.SetLeModeRemote(st);
+                    let soundFile = st ? 'le_on.wav' : 'le_off.wav';
+                    let soundPath = GLib.build_filenamev([ctx._extensionPath, 'sounds', soundFile]);
+                    if (GLib.file_test(soundPath, GLib.FileTest.EXISTS)) {
+                        GLib.spawn_command_line_async(`paplay "${soundPath}"`);
+                    }
+                },
+            },
+            {
+                id: 'dual_connect',
+                label: 'Dual Connection',
+                get: s => s.dual_connect,
+                set: (proxy, st) => proxy.SetDualConnectionRemote(st),
+            },
+            {
+                id: 'in_ear_det',
+                label: 'In-Ear Detection',
+                get: s => s.in_ear_det,
+                set: (proxy, st) => proxy.SetInEarDetectionRemote(st),
+            },
+        ],
+    },
+];
+
+/* ─── Control Adapter Classes ────────────────────────────── */
+class PillGroupControl {
+    constructor(actor, buttons, config) {
+        this.actor = actor;
+        this.buttons = buttons;
+        this.config = config;
+    }
+    isVisible() {
+        return this.actor.visible;
+    }
+    getNavWidgets() {
+        return this.buttons;
+    }
+    sync(state) {
+        if (typeof this.config.condition === 'function') {
+            this.actor.visible = Boolean(this.config.condition(state));
+        }
+        if (this.isVisible() && typeof this.config.get === 'function') {
+            let activeVal = this.config.get(state);
+            this.buttons.forEach(b => {
+                if (b._val === activeVal) b.add_style_class_name('active');
+                else b.remove_style_class_name('active');
+            });
+        }
+    }
+}
+
+class SwitchControl {
+    constructor(actor, config) {
+        this.actor = actor;
+        this.config = config;
+    }
+    isVisible() {
+        return this.actor.visible;
+    }
+    getNavWidgets() {
+        return [this.actor];
+    }
+    sync(state) {
+        if (typeof this.config.condition === 'function') {
+            this.actor.visible = Boolean(this.config.condition(state));
+        }
+        if (this.isVisible() && typeof this.config.get === 'function') {
+            this.actor.setToggleState(Boolean(this.config.get(state)));
+        }
+    }
+}
+
+class SliderControl {
+    constructor(actor, slider, config) {
+        this.actor = actor;
+        this.slider = slider;
+        this.config = config;
+    }
+    isVisible() {
+        return this.actor.visible;
+    }
+    getNavWidgets() {
+        return [this.slider];
+    }
+    sync(state) {
+        if (typeof this.config.condition === 'function') {
+            this.actor.visible = Boolean(this.config.condition(state));
+        }
+        if (this.isVisible() && typeof this.config.get === 'function') {
+            this.slider.value = this.config.get(state);
+        }
+    }
+}
+
+/* ─── Main Indicator & Panel Menu ────────────────────────── */
 const BudsIndicator = GObject.registerClass(
 class BudsIndicator extends PanelMenu.Button {
 
@@ -51,6 +238,7 @@ class BudsIndicator extends PanelMenu.Button {
         this._proxy = null;
         this._signalId = 0;
         this._updating = false;
+        this._controls = [];
 
         this._interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
         this._themeChangedId = this._interfaceSettings.connect('changed::color-scheme', () => {
@@ -103,13 +291,8 @@ class BudsIndicator extends PanelMenu.Button {
     _isLightMode() {
         try {
             let scheme = this._interfaceSettings ? this._interfaceSettings.get_string('color-scheme') : 'default';
-            // In GNOME: 'prefer-dark' is dark mode; 'default' or 'prefer-light' is light mode
-            if (scheme === 'prefer-dark')
-                return false;
-            if (scheme === 'prefer-light' || scheme === 'default')
-                return true;
-
-            // Fallback for custom GTK themes
+            if (scheme === 'prefer-dark') return false;
+            if (scheme === 'prefer-light' || scheme === 'default') return true;
             let gtkTheme = (this._interfaceSettings ? this._interfaceSettings.get_string('gtk-theme') : '').toLowerCase();
             return !gtkTheme.includes('dark');
         } catch (_) {
@@ -137,6 +320,7 @@ class BudsIndicator extends PanelMenu.Button {
         try {
             this.visible = Boolean(_s.connected);
             this._updateThemeClass();
+
             const fmt = (v, chg) => {
                 if (v >= 0 && v <= 100)
                     return chg ? `⚡ ${v}%` : `${v}%`;
@@ -159,53 +343,27 @@ class BudsIndicator extends PanelMenu.Button {
                 else this._badgeR.remove_style_class_name('charging');
             }
 
-            // Noise Control
-            this._setActive(this._ncBtns, _s.anc_mode);
-            this._ancSubRow.visible = (_s.anc_mode === 1);
-            this._smartToggle.setToggleState(_s.anc_depth === 0);
-            this._sliderRow.visible = (_s.anc_mode === 1 && _s.anc_depth !== 0);
-            if (_s.anc_depth !== 0 && _s.anc_mode === 1) {
-                const map = { 1: 1.0, 2: 0.5, 3: 0.0 };
-                this._ancSlider.value = map[_s.anc_depth] ?? 0.5;
+            // Sync all declarative controls
+            for (let ctrl of this._controls) {
+                ctrl.sync(_s);
             }
-            this._transRow.visible = (_s.anc_mode === 2);
-            this._setActive(this._transBtns, _s.trans_submode);
-
-            // Commute & Spatial
-            this._setActive(this._cmBtns, _s.commute_mode);
-            this._setActive(this._saBtns, _s.audio_mode);
-
-            // Head Tracking & Device Settings
-            this._htRow.visible = (_s.audio_mode === 2);
-            this._headToggle.setToggleState(_s.head_tracking);
-            this._leToggle.setToggleState(_s.le_mode);
-            this._dualToggle.setToggleState(_s.dual_connect);
-            this._earToggle.setToggleState(_s.in_ear_det);
         } catch (e) {
             console.error('Refresh error:', e);
         }
         this._updating = false;
     }
 
-    _setActive(btns, activeVal) {
-        btns.forEach(b => {
-            if (b._val === activeVal) b.add_style_class_name('active');
-            else b.remove_style_class_name('active');
-        });
-    }
-
     /* ── 2D Keyboard Grid Navigation ──────────────────────── */
     _getVisibleRows() {
-        let rows = [this._ncBtns];
-        if (this._ancSubRow && this._ancSubRow.visible) rows.push([this._smartToggle]);
-        if (this._sliderRow && this._sliderRow.visible) rows.push([this._ancSlider]);
-        if (this._transRow && this._transRow.visible) rows.push(this._transBtns);
-        rows.push(this._cmBtns);
-        rows.push(this._saBtns);
-        if (this._htRow && this._htRow.visible) rows.push([this._headToggle]);
-        rows.push([this._leToggle]);
-        rows.push([this._dualToggle]);
-        rows.push([this._earToggle]);
+        let rows = [];
+        for (let ctrl of this._controls) {
+            if (ctrl.isVisible()) {
+                let widgets = ctrl.getNavWidgets();
+                if (widgets && widgets.length > 0) {
+                    rows.push(widgets);
+                }
+            }
+        }
         return rows;
     }
 
@@ -215,12 +373,12 @@ class BudsIndicator extends PanelMenu.Button {
         widget.connect('key-press-event', (actor, event) => {
             let symbol = event.get_key_symbol();
 
-            if (widget === this._ancSlider) {
+            if (widget instanceof Slider.Slider) {
                 if (symbol === Clutter.KEY_Left) {
-                    this._ancSlider.value = Math.max(0.0, this._ancSlider.value - 0.5);
+                    widget.value = Math.max(0.0, widget.value - 0.5);
                     return Clutter.EVENT_STOP;
                 } else if (symbol === Clutter.KEY_Right) {
-                    this._ancSlider.value = Math.min(1.0, this._ancSlider.value + 0.5);
+                    widget.value = Math.min(1.0, widget.value + 0.5);
                     return Clutter.EVENT_STOP;
                 }
             }
@@ -327,7 +485,7 @@ class BudsIndicator extends PanelMenu.Button {
         return btn;
     }
 
-    /* ── Menu Construction ───────────────────────────────── */
+    /* ── Declarative Menu Construction ───────────────────── */
     _buildMenu() {
         const P = PopupMenu;
         this.menu.actor.add_style_class_name('buds-menu-box');
@@ -381,158 +539,92 @@ class BudsIndicator extends PanelMenu.Button {
 
         bItem.add_child(bBox);
         this.menu.addMenuItem(bItem);
-        this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
 
-        /* Noise Control Section */
-        this._addSectionTitle('Noise Control');
-        let ncItem = new P.PopupBaseMenuItem({ reactive: false });
-        let ncBox  = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._ncBtns = [
-            ['buds-noise-off', 0, 'Off'],
-            ['buds-anc', 1, 'Noise Cancellation'],
-            ['buds-transparency', 2, 'Transparency'],
-        ].map(([ic, v, t]) => {
-            let b = this._pill(ic, v, t, val => this._proxy.SetAncModeRemote(val));
-            ncBox.add_child(b);
-            return b;
-        });
-        ncItem.add_child(ncBox);
-        this.menu.addMenuItem(ncItem);
+        /* Build Features from Declarative Schema */
+        FEATURES.forEach((feature, idx) => {
+            this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
+            if (feature.title) {
+                this._addSectionTitle(feature.title);
+            }
 
-        /* Smart ANC Switch */
-        this._smartToggle = new P.PopupSwitchMenuItem('Smart Noise Cancelling', true);
-        this._smartToggle.connect('toggled', (_, st) => {
-            if (this._updating || !this._proxy) return;
-            this._proxy.SetAncDepthRemote(st ? 0 : 2);
-        });
-        this._setupKeyNav(this._smartToggle);
-        this._ancSubRow = this._smartToggle;
-        this.menu.addMenuItem(this._smartToggle);
+            if (feature.type === 'pill_group') {
+                this._buildPillGroup(feature);
+            } else if (feature.type === 'switches') {
+                feature.items.forEach(sw => this._buildSwitch(sw));
+            }
 
-        /* ANC Depth Slider */
-        let slItem = new P.PopupBaseMenuItem({ reactive: false });
-        let slBox  = new St.BoxLayout({ vertical: true, x_expand: true, style_class: 'buds-slider-box' });
-        slBox.add_child(new St.Label({ text: 'Noise Cancelling Level', style_class: 'buds-slider-label' }));
-        this._ancSlider = new Slider.Slider(0.5);
-        this._ancSlider.connect('notify::value', () => {
-            if (this._updating || !this._proxy) return;
-            let v = this._ancSlider.value;
-            let d = v < 0.25 ? 3 : v < 0.75 ? 2 : 1;
-            this._proxy.SetAncDepthRemote(d);
-        });
-        this._setupKeyNav(this._ancSlider);
-        slBox.add_child(this._ancSlider);
-        slItem.add_child(slBox);
-        this._sliderRow = slItem;
-        this.menu.addMenuItem(slItem);
-
-        /* Transparency Sub-modes */
-        let trItem = new P.PopupBaseMenuItem({ reactive: false });
-        let trVBox = new St.BoxLayout({ vertical: true, x_expand: true });
-        trVBox.add_child(new St.Label({ text: 'Transparency Level', style_class: 'buds-slider-label' }));
-        let trBox = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._transBtns = [
-            ['buds-transparency', 2, 'Regular'],
-            ['buds-voice', 0, 'Enhanced Voice'],
-            ['buds-ambience', 1, 'Enhanced Ambience'],
-        ].map(([ic, v, t]) => {
-            let b = this._pill(ic, v, t, val => this._proxy.SetTransparencySubmodeRemote(val));
-            trBox.add_child(b);
-            return b;
-        });
-        trVBox.add_child(trBox);
-        trItem.add_child(trVBox);
-        this._transRow = trItem;
-        this.menu.addMenuItem(trItem);
-
-        this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
-
-        /* Immersive Commute Section */
-        this._addSectionTitle('Immersive Commute');
-        let cmItem = new P.PopupBaseMenuItem({ reactive: false });
-        let cmBox  = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._cmBtns = [
-            ['buds-off', 0, 'Off'],
-            ['buds-train', 1, 'Train Sound'],
-            ['buds-transit', 2, 'Public Transit'],
-            ['buds-airplane', 3, 'Airplane Engine'],
-        ].map(([ic, v, t]) => {
-            let b = this._pill(ic, v, t, val => this._proxy.SetImmersiveCommuteRemote(val));
-            cmBox.add_child(b);
-            return b;
-        });
-        cmItem.add_child(cmBox);
-        this.menu.addMenuItem(cmItem);
-        this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
-
-        /* Spatial Audio Section */
-        this._addSectionTitle('Spatial Audio');
-        let saItem = new P.PopupBaseMenuItem({ reactive: false });
-        let saBox  = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
-        this._saBtns = [
-            ['buds-stereo', 0, 'Off (Stereo)'],
-            ['buds-dolby', 1, 'Dolby Audio'],
-            ['buds-xiaomi', 2, 'Xiaomi Immersive'],
-        ].map(([ic, v, t]) => {
-            let b = this._pill(ic, v, t, val => this._proxy.SetAudioModeRemote(val));
-            saBox.add_child(b);
-            return b;
-        });
-        saItem.add_child(saBox);
-        this.menu.addMenuItem(saItem);
-
-        /* Head Tracking Switch */
-        this._headToggle = new P.PopupSwitchMenuItem('Head Tracking', false);
-        this._headToggle.connect('toggled', (_, st) => {
-            if (this._updating || !this._proxy) return;
-            this._proxy.SetHeadTrackingRemote(st);
-        });
-        this._setupKeyNav(this._headToggle);
-        this._htRow = this._headToggle;
-        this.menu.addMenuItem(this._headToggle);
-
-        this.menu.addMenuItem(new P.PopupSeparatorMenuItem());
-
-        /* Device Settings Section */
-        this._addSectionTitle('Device Settings');
-
-        /* LE Mode Switch */
-        this._leToggle = new P.PopupSwitchMenuItem('LE Mode (Low Latency)', false);
-        this._leToggle.connect('toggled', (_, st) => {
-            if (this._updating || !this._proxy) return;
-            this._proxy.SetLeModeRemote(st);
-            let soundFile = st ? 'le_on.wav' : 'le_off.wav';
-            let soundPath = GLib.build_filenamev([this._extensionPath, 'sounds', soundFile]);
-            if (GLib.file_test(soundPath, GLib.FileTest.EXISTS)) {
-                GLib.spawn_command_line_async(`paplay "${soundPath}"`);
+            // Build any conditional sub-controls for this section
+            if (Array.isArray(feature.subControls)) {
+                feature.subControls.forEach(sub => {
+                    if (sub.type === 'switch') {
+                        this._buildSwitch(sub);
+                    } else if (sub.type === 'slider') {
+                        this._buildSlider(sub);
+                    } else if (sub.type === 'pill_group') {
+                        this._buildPillGroup(sub);
+                    }
+                });
             }
         });
-        this._setupKeyNav(this._leToggle);
-        this.menu.addMenuItem(this._leToggle);
+    }
 
-        /* Dual Connection (Multipoint) Switch */
-        this._dualToggle = new P.PopupSwitchMenuItem('Dual Connection', true);
-        this._dualToggle.connect('toggled', (_, st) => {
+    _buildPillGroup(config) {
+        const P = PopupMenu;
+        let item = new P.PopupBaseMenuItem({ reactive: false });
+        let container = item;
+
+        if (config.label) {
+            let vBox = new St.BoxLayout({ vertical: true, x_expand: true });
+            vBox.add_child(new St.Label({ text: config.label, style_class: 'buds-slider-label' }));
+            let btnBox = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
+            let btns = config.items.map(it => this._pill(it.icon, it.value, it.title, val => config.set(this._proxy, val)));
+            btns.forEach(b => btnBox.add_child(b));
+            vBox.add_child(btnBox);
+            item.add_child(vBox);
+            let ctrl = new PillGroupControl(item, btns, config);
+            this._controls.push(ctrl);
+        } else {
+            let box = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
+            let btns = config.items.map(it => this._pill(it.icon, it.value, it.title, val => config.set(this._proxy, val)));
+            btns.forEach(b => box.add_child(b));
+            item.add_child(box);
+            let ctrl = new PillGroupControl(item, btns, config);
+            this._controls.push(ctrl);
+        }
+
+        if (config.condition) item.visible = false;
+        this.menu.addMenuItem(item);
+    }
+
+    _buildSwitch(config) {
+        let swItem = new PopupMenu.PopupSwitchMenuItem(config.label, false);
+        swItem.connect('toggled', (_, st) => {
             if (this._updating || !this._proxy) return;
-            this._proxy.SetDualConnectionRemote(st);
+            config.set(this._proxy, st, this);
         });
-        this._setupKeyNav(this._dualToggle);
-        this.menu.addMenuItem(this._dualToggle);
+        this._setupKeyNav(swItem);
+        if (config.condition) swItem.visible = false;
+        this._controls.push(new SwitchControl(swItem, config));
+        this.menu.addMenuItem(swItem);
+    }
 
-        /* In-Ear Detection Switch */
-        this._earToggle = new P.PopupSwitchMenuItem('In-Ear Detection', true);
-        this._earToggle.connect('toggled', (_, st) => {
+    _buildSlider(config) {
+        let slItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
+        let slBox  = new St.BoxLayout({ vertical: true, x_expand: true, style_class: 'buds-slider-box' });
+        slBox.add_child(new St.Label({ text: config.label, style_class: 'buds-slider-label' }));
+
+        let slider = new Slider.Slider(0.5);
+        slider.connect('notify::value', () => {
             if (this._updating || !this._proxy) return;
-            this._proxy.SetInEarDetectionRemote(st);
+            config.set(this._proxy, slider.value);
         });
-        this._setupKeyNav(this._earToggle);
-        this.menu.addMenuItem(this._earToggle);
+        this._setupKeyNav(slider);
+        slBox.add_child(slider);
+        slItem.add_child(slBox);
 
-        /* Initial Visibility */
-        this._ancSubRow.visible = false;
-        this._sliderRow.visible = false;
-        this._transRow.visible  = false;
-        this._htRow.visible     = false;
+        if (config.condition) slItem.visible = false;
+        this._controls.push(new SliderControl(slItem, slider, config));
+        this.menu.addMenuItem(slItem);
     }
 
     _addSectionTitle(text) {
