@@ -4,6 +4,7 @@ High-efficiency background service for Xiaomi Vela OS M-BAP over RFCOMM Channel 
 Exposes org.redmibuds8.Control D-Bus IPC service.
 """
 
+import os
 import logging
 import signal
 import socket
@@ -90,13 +91,20 @@ class BudsConnection:
             GLib.idle_add(self.state_callback)
 
     def is_bluez_connected(self, system_bus):
-        """Check if BlueZ reports an active Bluetooth connection to the earbuds."""
+        """Check if BlueZ reports an active Bluetooth connection across any hci controller."""
         try:
-            dev_path = f"/org/bluez/hci0/dev_{MAC_ADDRESS.replace(':', '_')}"
-            dev_obj = system_bus.get_object("org.bluez", dev_path)
-            props = dbus.Interface(dev_obj, "org.freedesktop.DBus.Properties")
-            return bool(props.Get("org.bluez.Device1", "Connected"))
-        except Exception:
+            manager = dbus.Interface(system_bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
+            objects = manager.GetManagedObjects()
+            target_mac = MAC_ADDRESS.upper()
+            for path, interfaces in objects.items():
+                if "org.bluez.Device1" in interfaces:
+                    dev_props = interfaces["org.bluez.Device1"]
+                    addr = str(dev_props.get("Address", "")).upper()
+                    if addr == target_mac:
+                        return bool(dev_props.get("Connected", False))
+            return False
+        except Exception as e:
+            log.warning(f"Error querying BlueZ connection state: {e}")
             return False
 
     def connect_loop(self, system_bus):
@@ -171,10 +179,14 @@ class BudsConnection:
         """Handle BlueZ Profile1 inbound connection handoff."""
         try:
             s = socket.fromfd(fd, socket.AF_BLUETOOTH, socket.SOCK_STREAM)
+            try:
+                os.close(fd)
+            except Exception:
+                pass
             with self.lock:
                 self.sock      = s
                 self.connected = True
-            log.info(f"Inbound RFCOMM connection accepted (fd={fd}).")
+            log.info(f"Inbound RFCOMM connection accepted.")
             self.notify_state_change()
             self._start_periodic_query()
             self.listen_loop()
@@ -183,6 +195,12 @@ class BudsConnection:
         finally:
             with self.lock:
                 self.connected = False
+                if self.sock:
+                    try:
+                        self.sock.close()
+                    except Exception:
+                        pass
+                    self.sock = None
             self._stop_periodic_query()
             self.notify_state_change()
 
@@ -200,6 +218,12 @@ class BudsConnection:
                 break
         with self.lock:
             self.connected = False
+            if self.sock:
+                try:
+                    self.sock.close()
+                except Exception:
+                    pass
+                self.sock = None
         self._stop_periodic_query()
         log.info("Disconnected from earbuds.")
         self.notify_state_change()
@@ -353,8 +377,12 @@ class XiaomiProfile(dbus.service.Object):
 
     @dbus.service.method("org.bluez.Profile1", in_signature="oha{sv}", out_signature="")
     def NewConnection(self, path, fd, properties):
-        t = Thread(target=self._conn.accept_connection, args=(int(fd),), daemon=True)
-        t.start()
+        try:
+            real_fd = fd.take() if hasattr(fd, "take") else int(fd)
+            t = Thread(target=self._conn.accept_connection, args=(real_fd,), daemon=True)
+            t.start()
+        except Exception as e:
+            log.warning(f"Error accepting NewConnection from BlueZ: {e}")
 
     @dbus.service.method("org.bluez.Profile1", in_signature="o", out_signature="")
     def RequestDisconnection(self, path):
