@@ -5,12 +5,17 @@ Exposes org.redmibuds8.Control D-Bus IPC service.
 """
 
 import os
+import sys
 import logging
 import signal
 import socket
 import time
 import json
 from threading import Thread, Lock
+
+# Dynamic origin resolution for protocol module
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import protocol as proto
 
 import dbus
 import dbus.service
@@ -42,6 +47,7 @@ class BudsConnection:
         self.lock           = Lock()
         self.state_callback = state_callback
         self._status_timer  = None
+        self._recv_buffer   = b""
 
         # State cache
         self.battery_left   = -1
@@ -204,8 +210,41 @@ class BudsConnection:
             self._stop_periodic_query()
             self.notify_state_change()
 
+    def next_seq(self) -> int:
+        with self.lock:
+            self.seq = (self.seq + 1) % 256
+            return self.seq
+
+    def set_seq(self, seq: int):
+        with self.lock:
+            self.seq = seq % 256
+
+    def send_bytes(self, cmd_bytes: bytes) -> bool:
+        if not self.connected or not self.sock:
+            return False
+        try:
+            self.sock.send(cmd_bytes)
+            log.info(f"Sent command: {cmd_bytes.hex()}")
+            return True
+        except Exception as e:
+            log.warning(f"Failed to send command: {e}")
+            with self.lock:
+                self.connected = False
+            self.notify_state_change()
+            return False
+
+    def send_cmd(self, svc_hex: str, payload_hex: str) -> bool:
+        svc = int(svc_hex, 16)
+        payload = bytes.fromhex(payload_hex)
+        return self.send_bytes(proto.build_frame(svc, payload, self.next_seq()))
+
+    def query_status(self):
+        if self.connected:
+            self.send_bytes(proto.encode_query_status(self.next_seq()))
+
     def listen_loop(self):
         GLib.idle_add(self.query_status)
+        self._recv_buffer = b""
         while self.connected:
             try:
                 data = self.sock.recv(1024)
@@ -228,142 +267,59 @@ class BudsConnection:
         log.info("Disconnected from earbuds.")
         self.notify_state_change()
 
-    def query_status(self):
-        if self.connected:
-            self.send_cmd("0200", "ffffffff")
-
     def _parse_incoming(self, data: bytes):
-        """Parse structured RFCOMM frames: FE DC BA [type] [svc:2] [len:1] [seq:1] [payload] EF."""
+        self._recv_buffer += data
+        events, self._recv_buffer = proto.parse_stream(self._recv_buffer)
+        if not events:
+            return
+
         state_changed = False
-        i = 0
-        while i < len(data) - 3:
-            if data[i:i+3] != b'\xfe\xdc\xba':
-                i += 1
-                continue
-
-            if i + 8 > len(data):
-                break
-
-            pkt_type = data[i + 3]
-            svc      = (data[i + 4] << 8) | data[i + 5]
-            length   = data[i + 6]
-            payload_len = length - 1
-
-            if payload_len < 0:
-                i += 1
-                continue
-
-            pkt_end = i + 8 + payload_len
-            if pkt_end >= len(data):
-                break
-
-            payload = data[i + 8 : pkt_end]
-            if pkt_type == 0xC7:
-                state_changed |= self._handle_notification(svc, payload)
-
-            i = pkt_end + 1
-
-        # Check battery tag 04 07 [L] [R] [C]
-        hex_data = data.hex()
-        tag_pos = hex_data.find("0407")
-        if tag_pos != -1 and len(hex_data) >= tag_pos + 10:
-            state_changed |= self._parse_battery(hex_data, tag_pos)
+        for event in events:
+            if isinstance(event, proto.AncModeEvent):
+                if event.mode != self.anc_mode:
+                    self.anc_mode = event.mode
+                    state_changed = True
+            elif isinstance(event, proto.AncDepthEvent):
+                if event.depth != self.anc_depth:
+                    self.anc_depth = event.depth
+                    state_changed = True
+            elif isinstance(event, proto.TransparencySubmodeEvent):
+                if event.submode != self.trans_submode:
+                    self.trans_submode = event.submode
+                    state_changed = True
+            elif isinstance(event, proto.AudioModeEvent):
+                if event.mode != self.audio_mode:
+                    self.audio_mode = event.mode
+                    state_changed = True
+            elif isinstance(event, proto.HeadTrackingEvent):
+                if event.enabled != self.head_tracking:
+                    self.head_tracking = event.enabled
+                    state_changed = True
+            elif isinstance(event, proto.CommuteModeEvent):
+                if event.mode != self.commute_mode:
+                    self.commute_mode = event.mode
+                    state_changed = True
+            elif isinstance(event, proto.LeModeEvent):
+                if event.enabled != self.le_mode:
+                    self.le_mode = event.enabled
+                    state_changed = True
+            elif isinstance(event, proto.DualConnectionEvent):
+                if event.enabled != self.dual_connect:
+                    self.dual_connect = event.enabled
+                    state_changed = True
+            elif isinstance(event, proto.InEarDetectionEvent):
+                if event.enabled != self.in_ear_det:
+                    self.in_ear_det = event.enabled
+                    state_changed = True
+            elif isinstance(event, proto.BatteryEvent):
+                changed = (event.left != self.battery_left or event.right != self.battery_right or event.case != self.battery_case)
+                self.battery_left, self.charging_left   = event.left, event.charging_left
+                self.battery_right, self.charging_right = event.right, event.charging_right
+                self.battery_case, self.charging_case   = event.case, event.charging_case
+                state_changed |= changed
 
         if state_changed:
             self.notify_state_change()
-
-    def _handle_notification(self, svc, payload):
-        changed = False
-        if svc in (0x0800, 0x0E00):
-            if len(payload) >= 3 and payload[0] == 0x02:
-                if payload[1] == 0x04 and payload[2] in (0, 1, 2) and payload[2] != self.anc_mode:
-                    self.anc_mode = payload[2]
-                    changed = True
-                elif payload[1] == 0x06:
-                    val = bool(payload[2])
-                    if val != self.in_ear_det:
-                        self.in_ear_det = val
-                        changed = True
-
-        elif svc == 0xF200 and len(payload) >= 4:
-            if payload[:4] == b'\x04\x00\x0b\x01' and len(payload) >= 5:
-                if payload[4] in (0, 1, 2, 3) and payload[4] != self.anc_depth:
-                    self.anc_depth = payload[4]
-                    changed = True
-            elif payload[:4] == b'\x04\x00\x0b\x02' and len(payload) >= 5:
-                if payload[4] in (0, 1, 2) and payload[4] != self.trans_submode:
-                    self.trans_submode = payload[4]
-                    changed = True
-            elif payload[:3] == b'\x03\x00\x1d':
-                mode = {0x03: 0, 0x0A: 1, 0x0B: 2}.get(payload[3])
-                if mode is not None and mode != self.audio_mode:
-                    self.audio_mode = mode
-                    changed = True
-            elif payload[:3] == b'\x03\x00\x68':
-                val = (payload[3] != 0x01)
-                if val != self.head_tracking:
-                    self.head_tracking = val
-                    changed = True
-            elif payload[:3] == b'\x03\x00\x67':
-                if payload[3] in (0, 1, 2, 3) and payload[3] != self.commute_mode:
-                    self.commute_mode = payload[3]
-                    changed = True
-            elif payload[:3] in (b'\x03\x00\x28', b'\x03\x00\x07'):
-                val = (payload[3] == 0x00)
-                if val != self.le_mode:
-                    self.le_mode = val
-                    changed = True
-            elif payload[:3] == b'\x03\x00\x04':
-                val = bool(payload[3])
-                if val != self.dual_connect:
-                    self.dual_connect = val
-                    changed = True
-
-        return changed
-
-    def _parse_battery(self, hex_data, tag_pos):
-        try:
-            raw_l = int(hex_data[tag_pos + 4 : tag_pos + 6], 16)
-            raw_r = int(hex_data[tag_pos + 6 : tag_pos + 8], 16)
-            raw_c = int(hex_data[tag_pos + 8 : tag_pos + 10], 16)
-
-            def decode_bat(v):
-                if v == 0xFF:
-                    return -1, False
-                return (v & 0x7F if (v & 0x7F) <= 100 else -1), bool(v & 0x80)
-
-            l_level, l_chg = decode_bat(raw_l)
-            r_level, r_chg = decode_bat(raw_r)
-            c_level, c_chg = decode_bat(raw_c)
-
-            changed = (l_level != self.battery_left or r_level != self.battery_right or c_level != self.battery_case)
-            self.battery_left, self.charging_left   = l_level, l_chg
-            self.battery_right, self.charging_right = r_level, r_chg
-            self.battery_case, self.charging_case   = c_level, c_chg
-            return changed
-        except Exception as e:
-            log.warning(f"Error parsing battery tag: {e}")
-            return False
-
-    def send_cmd(self, svc_hex: str, payload_hex: str):
-        if not self.connected or not self.sock:
-            return False
-        with self.lock:
-            self.seq = (self.seq + 1) % 256
-            seq_val = self.seq
-
-        length = len(payload_hex) // 2 + 1
-        cmd_bytes = bytes.fromhex(f"fedcbac4{svc_hex}{length:02x}{seq_val:02x}{payload_hex}ef")
-        try:
-            self.sock.send(cmd_bytes)
-            log.info(f"Sent command: {cmd_bytes.hex()}")
-            return True
-        except Exception as e:
-            log.warning(f"Failed to send command: {e}")
-            with self.lock:
-                self.connected = False
-            self.notify_state_change()
-            return False
 
 
 class XiaomiProfile(dbus.service.Object):
@@ -408,75 +364,71 @@ class BudsInterface:
 
     def SetAncMode(self, mode: Int):
         self.conn.anc_mode = mode
-        self.conn.send_cmd("0800", f"0204{mode:02x}")
+        self.conn.send_bytes(proto.encode_anc_mode(mode, self.conn.next_seq()))
         self._emit_state()
 
     def SetAncDepth(self, depth: Int):
         self.conn.anc_depth = depth
-        self.conn.send_cmd("f200", f"04000b01{depth:02x}")
+        self.conn.send_bytes(proto.encode_anc_depth(depth, self.conn.next_seq()))
         self._emit_state()
 
     def SetTransparencySubmode(self, submode: Int):
         self.conn.trans_submode = submode
-        self.conn.send_cmd("f200", f"04000b02{submode:02x}")
+        self.conn.send_bytes(proto.encode_transparency_submode(submode, self.conn.next_seq()))
         self._emit_state()
 
     def SetEqMode(self, mode: Int):
         self.conn.eq_mode = mode
-        self.conn.send_cmd("f200", f"04003601{mode:02x}")
+        self.conn.send_bytes(proto.encode_eq_mode(mode, self.conn.next_seq()))
         self._emit_state()
 
     def SetImmersiveCommute(self, mode: Int):
         self.conn.commute_mode = mode
-        self.conn.send_cmd("f200", f"030067{mode:02x}")
+        self.conn.send_bytes(proto.encode_commute_mode(mode, self.conn.next_seq()))
         self._emit_state()
 
     def SetInEarDetection(self, enabled: Bool):
         self.conn.in_ear_det = enabled
-        if enabled:
-            self.conn.send_cmd("0800", "020601")
-            self.conn.send_cmd("f200", "03002401")
-            self.conn.send_cmd("f200", "04002401")
-        else:
-            self.conn.send_cmd("0800", "020600")
-            self.conn.send_cmd("f200", "03002400")
-            self.conn.send_cmd("f200", "04002400")
+        frames, next_seq = proto.encode_in_ear_detection(enabled, self.conn.next_seq())
+        for f in frames:
+            self.conn.send_bytes(f)
+        self.conn.set_seq(next_seq)
         self._emit_state()
 
     def SetAudioMode(self, mode: Int):
         self.conn.audio_mode = mode
-        p = {0: "03001d03", 1: "03001d0a", 2: "03001d0b"}.get(mode, "03001d0a")
-        self.conn.send_cmd("f200", p)
+        self.conn.send_bytes(proto.encode_audio_mode(mode, self.conn.next_seq()))
         if mode in (0, 1) and self.conn.head_tracking:
             self.conn.head_tracking = False
-            self.conn.send_cmd("f200", "03006801")
+            frames, next_seq = proto.encode_head_tracking(False, self.conn.next_seq(), mode)
+            for f in frames:
+                self.conn.send_bytes(f)
+            self.conn.set_seq(next_seq)
         self._emit_state()
 
     def SetHeadTracking(self, enabled: Bool):
         self.conn.head_tracking = enabled
-        if enabled:
-            if self.conn.audio_mode != 2:
-                self.conn.audio_mode = 2
-                self.conn.send_cmd("f200", "03001d0b")
-            self.conn.send_cmd("f200", "03006800")
-            self.conn.send_cmd("f200", "03006802")
-        else:
-            self.conn.send_cmd("f200", "03006801")
+        if enabled and self.conn.audio_mode != 2:
+            self.conn.audio_mode = 2
+        frames, next_seq = proto.encode_head_tracking(enabled, self.conn.next_seq(), self.conn.audio_mode)
+        for f in frames:
+            self.conn.send_bytes(f)
+        self.conn.set_seq(next_seq)
         self._emit_state()
 
     def SetLeMode(self, enabled: Bool):
         log.info(f"DBus SetLeMode({enabled})")
         self.conn.le_mode = enabled
-        val = 0 if enabled else 1
-        self.conn.send_cmd("f200", f"030028{val:02x}")
-        self.conn.send_cmd("f200", f"030007{val:02x}")
+        frames, next_seq = proto.encode_le_mode(enabled, self.conn.next_seq())
+        for f in frames:
+            self.conn.send_bytes(f)
+        self.conn.set_seq(next_seq)
         self._emit_state()
 
     def SetDualConnection(self, enabled: Bool):
         log.info(f"DBus SetDualConnection({enabled})")
         self.conn.dual_connect = enabled
-        val = 1 if enabled else 0
-        self.conn.send_cmd("f200", f"030004{val:02x}")
+        self.conn.send_bytes(proto.encode_dual_connection(enabled, self.conn.next_seq()))
         self._emit_state()
 
     # D-Bus Property accessors
