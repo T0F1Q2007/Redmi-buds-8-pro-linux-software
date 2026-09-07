@@ -60,21 +60,22 @@ class BudsIndicator extends PanelMenu.Button {
             this._updateThemeClass();
         });
 
+        // Register custom icons directory with St.IconTheme
+        let iconTheme = new St.IconTheme();
+        let iconDir = GLib.build_filenamev([this._extensionPath, 'icons']);
+        if (!iconTheme.get_search_path().includes(iconDir)) {
+            iconTheme.prepend_search_path(iconDir);
+        }
+
         this._icon = new St.Icon({
             icon_name: 'audio-headphones-symbolic',
             style_class: 'system-status-icon',
         });
         this.add_child(this._icon);
+        this.visible = false;
 
         this._buildMenu();
         this._connectDBus();
-    }
-
-    _gicon(name) {
-        let file = Gio.File.new_for_path(
-            GLib.build_filenamev([this._extensionPath, 'icons', `${name}-symbolic.svg`])
-        );
-        return new Gio.FileIcon({ file });
     }
 
     async _connectDBus() {
@@ -134,6 +135,7 @@ class BudsIndicator extends PanelMenu.Button {
     _refreshUI() {
         this._updating = true;
         try {
+            this.visible = Boolean(_s.connected);
             this._updateThemeClass();
             const fmt = (v, chg) => {
                 if (v >= 0 && v <= 100)
@@ -287,12 +289,11 @@ class BudsIndicator extends PanelMenu.Button {
 
     /* ── Pill Button Factory ─────────────────────────────── */
     _pill(iconId, value, tooltip, cb) {
-        let customPath = GLib.build_filenamev([
-            this._extensionPath, 'icons', `${iconId}-symbolic.svg`
-        ]);
-        let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
-            ? new St.Icon({ gicon: new Gio.FileIcon({ file: Gio.File.new_for_path(customPath) }), icon_size: 18, style_class: 'buds-pill-icon' })
-            : new St.Icon({ icon_name: `${iconId}-symbolic`, icon_size: 18, style_class: 'buds-pill-icon' });
+        let icon = new St.Icon({
+            icon_name: `${iconId}-symbolic`,
+            icon_size: 18,
+            style_class: 'buds-pill-icon',
+        });
 
         let btn = new St.Button({
             style_class: 'buds-pill-button',
@@ -355,7 +356,7 @@ class BudsIndicator extends PanelMenu.Button {
                 y_align: Clutter.ActorAlign.CENTER,
             });
             let icon = new St.Icon({
-                gicon: this._gicon(iconName),
+                icon_name: `${iconName}-symbolic`,
                 icon_size: 16,
                 style_class: 'buds-batt-icon',
                 y_align: Clutter.ActorAlign.CENTER,
@@ -469,7 +470,7 @@ class BudsIndicator extends PanelMenu.Button {
         let saItem = new P.PopupBaseMenuItem({ reactive: false });
         let saBox  = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
         this._saBtns = [
-            ['buds-noise-off', 0, 'Off (Stereo)'],
+            ['buds-stereo', 0, 'Off (Stereo)'],
             ['buds-dolby', 1, 'Dolby Audio'],
             ['buds-xiaomi', 2, 'Xiaomi Immersive'],
         ].map(([ic, v, t]) => {
