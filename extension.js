@@ -135,10 +135,27 @@ class BudsIndicator extends PanelMenu.Button {
         this._updating = true;
         try {
             this._updateThemeClass();
-            const fmt = v => (v >= 0 && v <= 100) ? `${v}%` : '--';
-            this._battL.set_text(fmt(_s.battery_left));
-            this._battR.set_text(fmt(_s.battery_right));
-            this._battC.set_text(fmt(_s.battery_case));
+            const fmt = (v, chg) => {
+                if (v >= 0 && v <= 100)
+                    return chg ? `⚡ ${v}%` : `${v}%`;
+                return '--';
+            };
+            this._battL.set_text(fmt(_s.battery_left, _s.charging_left));
+            this._battC.set_text(fmt(_s.battery_case, _s.charging_case));
+            this._battR.set_text(fmt(_s.battery_right, _s.charging_right));
+
+            if (this._badgeL) {
+                if (_s.charging_left) this._badgeL.add_style_class_name('charging');
+                else this._badgeL.remove_style_class_name('charging');
+            }
+            if (this._badgeC) {
+                if (_s.charging_case) this._badgeC.add_style_class_name('charging');
+                else this._badgeC.remove_style_class_name('charging');
+            }
+            if (this._badgeR) {
+                if (_s.charging_right) this._badgeR.add_style_class_name('charging');
+                else this._badgeR.remove_style_class_name('charging');
+            }
 
             // Noise Control
             this._setActive(this._ncBtns, _s.anc_mode);
@@ -216,7 +233,7 @@ class BudsIndicator extends PanelMenu.Button {
                 this._navigateGrid(actor, -1, 0);
             } else if (symbol === Clutter.KEY_Return || symbol === Clutter.KEY_space || symbol === Clutter.KEY_KP_Enter) {
                 if (widget instanceof St.Button) {
-                    widget.emit('clicked');
+                    widget.emit('clicked', Clutter.BUTTON_PRIMARY);
                 } else if (typeof widget.toggle === 'function') {
                     widget.toggle();
                 } else if (widget._switch) {
@@ -326,21 +343,40 @@ class BudsIndicator extends PanelMenu.Button {
             }
         });
 
-        /* Battery Telemetry Row */
-        let bItem = new P.PopupBaseMenuItem({ reactive: false });
+        /* Battery Telemetry Hero Badges */
+        let bItem = new P.PopupBaseMenuItem({ reactive: false, can_focus: false });
         let bBox  = new St.BoxLayout({ style_class: 'buds-battery-row', x_expand: true });
 
-        bBox.add_child(new St.Icon({ gicon: this._gicon('buds-earbud-left'), icon_size: 14, style_class: 'buds-batt-icon' }));
-        this._battL = new St.Label({ text: '--', style_class: 'buds-battery-value', y_align: Clutter.ActorAlign.CENTER });
-        bBox.add_child(this._battL);
+        const createBattBadge = (iconName) => {
+            let badge = new St.BoxLayout({
+                style_class: 'buds-batt-badge',
+                x_expand: true,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            let icon = new St.Icon({
+                gicon: this._gicon(iconName),
+                icon_size: 16,
+                style_class: 'buds-batt-icon',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            let val = new St.Label({
+                text: '--',
+                style_class: 'buds-battery-value',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            badge.add_child(icon);
+            badge.add_child(val);
+            return [badge, val];
+        };
 
-        bBox.add_child(new St.Icon({ gicon: this._gicon('buds-case'), icon_size: 14, style_class: 'buds-batt-icon buds-batt-sep' }));
-        this._battC = new St.Label({ text: '--', style_class: 'buds-battery-value', y_align: Clutter.ActorAlign.CENTER });
-        bBox.add_child(this._battC);
+        [this._badgeL, this._battL] = createBattBadge('buds-earbud-left');
+        [this._badgeC, this._battC] = createBattBadge('buds-case');
+        [this._badgeR, this._battR] = createBattBadge('buds-earbud-right');
 
-        bBox.add_child(new St.Icon({ gicon: this._gicon('buds-earbud-right'), icon_size: 14, style_class: 'buds-batt-icon buds-batt-sep' }));
-        this._battR = new St.Label({ text: '--', style_class: 'buds-battery-value', y_align: Clutter.ActorAlign.CENTER });
-        bBox.add_child(this._battR);
+        bBox.add_child(this._badgeL);
+        bBox.add_child(this._badgeC);
+        bBox.add_child(this._badgeR);
 
         bItem.add_child(bBox);
         this.menu.addMenuItem(bItem);
@@ -499,7 +535,7 @@ class BudsIndicator extends PanelMenu.Button {
     }
 
     _addSectionTitle(text) {
-        let item = new PopupMenu.PopupBaseMenuItem({ reactive: false });
+        let item = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
         item.add_child(new St.Label({ text, style_class: 'buds-section-title', x_expand: true }));
         this.menu.addMenuItem(item);
     }

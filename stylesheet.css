@@ -7,33 +7,41 @@
 
 /* ── Common Base Layout ──────────────────────────────────── */
 .buds-battery-row {
+    spacing: 8px;
+    padding: 6px 6px 4px 6px;
+}
+
+.buds-batt-badge {
     spacing: 6px;
-    padding: 6px 10px;
+    padding: 7px 12px;
+    border-radius: 12px;
+    transition-duration: 140ms;
+    border: none !important;
+    outline: none !important;
 }
 
 .buds-batt-icon {
-    margin-right: 1px;
-}
-
-.buds-batt-sep {
-    margin-left: 10px;
+    icon-size: 16px;
+    margin-right: 2px;
 }
 
 .buds-battery-value {
-    font-size: 11pt;
-    font-weight: bold;
+    font-size: 10.5pt;
+    font-weight: 700;
+    letter-spacing: -0.2px;
 }
 
 .buds-section-title {
-    font-size: 10.5pt;
-    font-weight: 700;
-    padding: 4px 0 2px 0;
-    letter-spacing: 0.5px;
+    font-size: 8.5pt;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    padding: 8px 6px 2px 6px;
 }
 
 .buds-button-group {
-    spacing: 8px;
-    padding: 4px 0;
+    spacing: 6px;
+    padding: 4px 6px;
 }
 
 .buds-pill-button {
@@ -43,7 +51,7 @@
     padding: 8px 14px;
     border: none !important;
     outline: none !important;
-    transition-duration: 150ms;
+    transition-duration: 140ms;
 }
 
 .buds-pill-icon {
@@ -51,28 +59,31 @@
 }
 
 .buds-slider-box {
-    padding: 0 4px;
-    spacing: 2px;
+    padding: 4px 6px;
+    spacing: 4px;
 }
 
 .buds-slider-label {
-    font-size: 9.5pt;
+    font-size: 9pt;
+    font-weight: 600;
     padding-bottom: 2px;
 }
 
 .buds-tooltip {
     border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 9.5pt;
+    padding: 5px 11px;
+    font-size: 9pt;
     font-weight: 600;
     border: none !important;
+    letter-spacing: -0.1px;
 }
 
 .popup-menu-item {
-    padding: 6px 12px;
-    border-radius: 12px;
+    padding: 6px 10px;
+    border-radius: 10px;
     border: none !important;
     outline: none !important;
+    transition-duration: 140ms;
 }
 
 
@@ -87,7 +98,21 @@
     border: none !important;
     border-radius: 20px !important;
     padding: 10px 8px !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85) !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85) !important;
+}
+
+/* Telemetry Badges (Dark Mode) */
+.buds-menu-box .buds-batt-badge,
+.buds-menu-box.dark-theme .buds-batt-badge,
+.dark-theme .buds-batt-badge {
+    background-color: rgba(83, 104, 120, 0.16) !important;
+    color: #E5E4E2 !important;
+}
+
+.buds-menu-box .buds-batt-badge.charging,
+.buds-menu-box.dark-theme .buds-batt-badge.charging,
+.dark-theme .buds-batt-badge.charging {
+    background-color: rgba(83, 104, 120, 0.3) !important;
 }
 
 .buds-menu-box .buds-batt-icon,
@@ -98,6 +123,12 @@
 .buds-menu-box.dark-theme .popup-menu-item,
 .dark-theme .popup-menu-item {
     color: #E5E4E2 !important;
+}
+
+.buds-menu-box .popup-menu-item:hover,
+.buds-menu-box.dark-theme .popup-menu-item:hover,
+.dark-theme .popup-menu-item:hover {
+    background-color: rgba(83, 104, 120, 0.18) !important;
 }
 
 .buds-menu-box .buds-section-title,
@@ -120,7 +151,13 @@
 .buds-menu-box .buds-pill-button:hover,
 .buds-menu-box.dark-theme .buds-pill-button:hover,
 .dark-theme .buds-pill-button:hover {
-    background-color: rgba(83, 104, 120, 0.45) !important;
+    background-color: rgba(83, 104, 120, 0.42) !important;
+}
+
+.buds-menu-box .buds-pill-button:active,
+.buds-menu-box.dark-theme .buds-pill-button:active,
+.dark-theme .buds-pill-button:active {
+    background-color: rgba(83, 104, 120, 0.6) !important;
 }
 
 .buds-menu-box .buds-pill-icon,
@@ -137,13 +174,25 @@
     border: none !important;
 }
 
+.buds-menu-box .buds-pill-button.active:hover,
+.buds-menu-box.dark-theme .buds-pill-button.active:hover,
+.dark-theme .buds-pill-button.active:hover {
+    background-color: #FFFFFF !important;
+}
+
+.buds-menu-box .buds-pill-button.active:active,
+.buds-menu-box.dark-theme .buds-pill-button.active:active,
+.dark-theme .buds-pill-button.active:active {
+    background-color: #D6D5D3 !important;
+}
+
 .buds-menu-box .buds-pill-button.active .buds-pill-icon,
 .buds-menu-box.dark-theme .buds-pill-button.active .buds-pill-icon,
 .dark-theme .buds-pill-button.active .buds-pill-icon {
     color: #0A0A0A !important;
 }
 
-/* Focus Ring (Dark Mode) */
+/* Focus Ring (Dark Mode: keyboard navigation only) */
 .buds-menu-box .buds-pill-button:focus,
 .buds-menu-box .popup-menu-item:focus,
 .buds-menu-box.dark-theme .buds-pill-button:focus,
@@ -152,7 +201,7 @@
 .dark-theme .popup-menu-item:focus {
     border: 2px solid #E5E4E2 !important;
     outline: none !important;
-    background-color: rgba(83, 104, 120, 0.5) !important;
+    background-color: rgba(83, 104, 120, 0.45) !important;
 }
 
 .buds-menu-box .buds-tooltip,
@@ -161,19 +210,48 @@
     background-color: #0A0A0A !important;
     color: #E5E4E2 !important;
     border: none !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.85) !important;
 }
 
 .buds-menu-box .popup-separator-menu-item-separator,
 .buds-menu-box.dark-theme .popup-separator-menu-item-separator,
 .dark-theme .popup-separator-menu-item-separator {
-    background-color: #536878 !important;
+    background-color: rgba(83, 104, 120, 0.3) !important;
+    height: 1px !important;
+    margin: 4px 6px !important;
+}
+
+.buds-menu-box .toggle-switch,
+.buds-menu-box.dark-theme .toggle-switch,
+.dark-theme .toggle-switch {
+    background-color: rgba(83, 104, 120, 0.25) !important;
+}
+
+.buds-menu-box .toggle-switch .handle,
+.buds-menu-box.dark-theme .toggle-switch .handle,
+.dark-theme .toggle-switch .handle {
+    background-color: #E5E4E2 !important;
 }
 
 .buds-menu-box .toggle-switch:checked,
 .buds-menu-box.dark-theme .toggle-switch:checked,
 .dark-theme .toggle-switch:checked {
     background-color: #536878 !important;
+}
+
+.buds-menu-box .buds-slider-box .slider,
+.buds-menu-box.dark-theme .buds-slider-box .slider,
+.dark-theme .buds-slider-box .slider {
+    -barlevel-height: 4px;
+    -barlevel-background-color: rgba(83, 104, 120, 0.25) !important;
+    -barlevel-active-background-color: #536878 !important;
+    color: #E5E4E2 !important;
+}
+
+.buds-menu-box .buds-slider-box .slider:hover,
+.buds-menu-box.dark-theme .buds-slider-box .slider:hover,
+.dark-theme .buds-slider-box .slider:hover {
+    color: #FFFFFF !important;
 }
 
 
@@ -189,7 +267,21 @@
     border: none !important;
     border-radius: 20px !important;
     padding: 10px 8px !important;
-    box-shadow: 0 8px 24px rgba(170, 0, 3, 0.15) !important;
+    box-shadow: 0 10px 30px rgba(170, 0, 3, 0.12) !important;
+}
+
+/* Telemetry Badges (Light Mode) */
+.buds-menu-box.light-theme .buds-batt-badge,
+.buds-menu-box .popup-menu-content.light-theme .buds-batt-badge,
+.light-theme .buds-batt-badge {
+    background-color: rgba(191, 180, 220, 0.28) !important;
+    color: #AA0003 !important;
+}
+
+.buds-menu-box.light-theme .buds-batt-badge.charging,
+.buds-menu-box .popup-menu-content.light-theme .buds-batt-badge.charging,
+.light-theme .buds-batt-badge.charging {
+    background-color: rgba(191, 180, 220, 0.48) !important;
 }
 
 .buds-menu-box.light-theme .buds-batt-icon,
@@ -202,6 +294,12 @@
 .light-theme .buds-battery-value,
 .light-theme .popup-menu-item {
     color: #AA0003 !important;
+}
+
+.buds-menu-box.light-theme .popup-menu-item:hover,
+.buds-menu-box .popup-menu-content.light-theme .popup-menu-item:hover,
+.light-theme .popup-menu-item:hover {
+    background-color: rgba(191, 180, 220, 0.2) !important;
 }
 
 .buds-menu-box.light-theme .buds-section-title,
@@ -224,7 +322,13 @@
 .buds-menu-box.light-theme .buds-pill-button:hover,
 .buds-menu-box .popup-menu-content.light-theme .buds-pill-button:hover,
 .light-theme .buds-pill-button:hover {
-    background-color: rgba(191, 180, 220, 0.85) !important;
+    background-color: rgba(191, 180, 220, 0.75) !important;
+}
+
+.buds-menu-box.light-theme .buds-pill-button:active,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button:active,
+.light-theme .buds-pill-button:active {
+    background-color: rgba(191, 180, 220, 0.95) !important;
 }
 
 .buds-menu-box.light-theme .buds-pill-icon,
@@ -241,13 +345,25 @@
     border: none !important;
 }
 
+.buds-menu-box.light-theme .buds-pill-button.active:hover,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button.active:hover,
+.light-theme .buds-pill-button.active:hover {
+    background-color: #C00004 !important;
+}
+
+.buds-menu-box.light-theme .buds-pill-button.active:active,
+.buds-menu-box .popup-menu-content.light-theme .buds-pill-button.active:active,
+.light-theme .buds-pill-button.active:active {
+    background-color: #8A0002 !important;
+}
+
 .buds-menu-box.light-theme .buds-pill-button.active .buds-pill-icon,
 .buds-menu-box .popup-menu-content.light-theme .buds-pill-button.active .buds-pill-icon,
 .light-theme .buds-pill-button.active .buds-pill-icon {
     color: #FAFBFD !important;
 }
 
-/* Focus Ring (Light Mode) */
+/* Focus Ring (Light Mode: keyboard navigation only) */
 .buds-menu-box.light-theme .buds-pill-button:focus,
 .buds-menu-box.light-theme .popup-menu-item:focus,
 .buds-menu-box .popup-menu-content.light-theme .buds-pill-button:focus,
@@ -256,7 +372,7 @@
 .light-theme .popup-menu-item:focus {
     border: 2px solid #AA0003 !important;
     outline: none !important;
-    background-color: rgba(191, 180, 220, 0.5) !important;
+    background-color: rgba(191, 180, 220, 0.55) !important;
 }
 
 .buds-menu-box.light-theme .buds-tooltip,
@@ -265,23 +381,46 @@
     background-color: #FAFBFD !important;
     color: #AA0003 !important;
     border: none !important;
-    box-shadow: 0 4px 14px rgba(170, 0, 3, 0.2) !important;
+    box-shadow: 0 4px 14px rgba(170, 0, 3, 0.18) !important;
 }
 
 .buds-menu-box.light-theme .popup-separator-menu-item-separator,
 .buds-menu-box .popup-menu-content.light-theme .popup-separator-menu-item-separator,
 .light-theme .popup-separator-menu-item-separator {
-    background-color: #BFB4DC !important;
+    background-color: rgba(191, 180, 220, 0.45) !important;
+    height: 1px !important;
+    margin: 4px 6px !important;
 }
 
 .buds-menu-box.light-theme .toggle-switch,
 .buds-menu-box .popup-menu-content.light-theme .toggle-switch,
 .light-theme .toggle-switch {
-    background-color: #BFB4DC !important;
+    background-color: rgba(191, 180, 220, 0.45) !important;
+}
+
+.buds-menu-box.light-theme .toggle-switch .handle,
+.buds-menu-box .popup-menu-content.light-theme .toggle-switch .handle,
+.light-theme .toggle-switch .handle {
+    background-color: #FAFBFD !important;
 }
 
 .buds-menu-box.light-theme .toggle-switch:checked,
 .buds-menu-box .popup-menu-content.light-theme .toggle-switch:checked,
 .light-theme .toggle-switch:checked {
     background-color: #AA0003 !important;
+}
+
+.buds-menu-box.light-theme .buds-slider-box .slider,
+.buds-menu-box .popup-menu-content.light-theme .buds-slider-box .slider,
+.light-theme .buds-slider-box .slider {
+    -barlevel-height: 4px;
+    -barlevel-background-color: rgba(191, 180, 220, 0.45) !important;
+    -barlevel-active-background-color: #AA0003 !important;
+    color: #AA0003 !important;
+}
+
+.buds-menu-box.light-theme .buds-slider-box .slider:hover,
+.buds-menu-box .popup-menu-content.light-theme .buds-slider-box .slider:hover,
+.light-theme .buds-slider-box .slider:hover {
+    color: #C00004 !important;
 }
