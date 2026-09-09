@@ -248,12 +248,7 @@ class BudsIndicator extends PanelMenu.Button {
             this._updateThemeClass();
         });
 
-        // Register custom icons directory with the default St.IconTheme
-        let iconTheme = St.IconTheme.get_default();
-        let iconDir = GLib.build_filenamev([this._extensionPath, 'icons']);
-        if (!iconTheme.get_search_path().includes(iconDir)) {
-            iconTheme.prepend_search_path(iconDir);
-        }
+
 
         this._icon = new St.Icon({
             icon_name: 'audio-headphones-symbolic',
@@ -264,13 +259,6 @@ class BudsIndicator extends PanelMenu.Button {
 
         this._buildMenu();
         this._connectDBus();
-    }
-
-    _gicon(name) {
-        let file = Gio.File.new_for_path(
-            GLib.build_filenamev([this._extensionPath, 'icons', `${name}-symbolic.svg`])
-        );
-        return new Gio.FileIcon({ file });
     }
 
     async _connectDBus() {
@@ -454,12 +442,11 @@ class BudsIndicator extends PanelMenu.Button {
 
     /* ── Pill Button Factory ─────────────────────────────── */
     _pill(iconId, value, tooltip, cb) {
-        let customPath = GLib.build_filenamev([
-            this._extensionPath, 'icons', `${iconId}-symbolic.svg`
-        ]);
-        let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
-            ? new St.Icon({ gicon: this._gicon(iconId), icon_size: 18, style_class: 'buds-pill-icon' })
-            : new St.Icon({ icon_name: `${iconId}-symbolic`, icon_size: 18, style_class: 'buds-pill-icon' });
+        let icon = new St.Icon({
+            icon_name: `${iconId}-symbolic`,
+            icon_size: 18,
+            style_class: 'buds-pill-icon',
+        });
 
         let btn = new St.Button({
             style_class: 'buds-pill-button',
@@ -521,12 +508,12 @@ class BudsIndicator extends PanelMenu.Button {
                 x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.CENTER,
             });
-            let customPath = GLib.build_filenamev([
-                this._extensionPath, 'icons', `${iconName}-symbolic.svg`
-            ]);
-            let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
-                ? new St.Icon({ gicon: this._gicon(iconName), icon_size: 16, style_class: 'buds-batt-icon', y_align: Clutter.ActorAlign.CENTER })
-                : new St.Icon({ icon_name: `${iconName}-symbolic`, icon_size: 16, style_class: 'buds-batt-icon', y_align: Clutter.ActorAlign.CENTER });
+            let icon = new St.Icon({
+                icon_name: `${iconName}-symbolic`,
+                icon_size: 16,
+                style_class: 'buds-batt-icon',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
             let val = new St.Label({
                 text: '--',
                 style_class: 'buds-battery-value',
