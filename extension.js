@@ -255,10 +255,16 @@ class BudsIndicator extends PanelMenu.Button {
             style_class: 'system-status-icon',
         });
         this.add_child(this._icon);
-        this.visible = false;
 
         this._buildMenu();
         this._connectDBus();
+    }
+
+    _gicon(name) {
+        let file = Gio.File.new_for_path(
+            GLib.build_filenamev([this._extensionPath, 'icons', `${name}-symbolic.svg`])
+        );
+        return new Gio.FileIcon({ file });
     }
 
     async _connectDBus() {
@@ -277,6 +283,27 @@ class BudsIndicator extends PanelMenu.Button {
                     this._refreshUI();
                 }
             );
+
+            // Fetch initial state from D-Bus properties
+            try {
+                if (typeof this._proxy.Connected !== 'undefined') _s.connected = Boolean(this._proxy.Connected);
+                if (typeof this._proxy.BatteryLeft !== 'undefined') _s.battery_left = this._proxy.BatteryLeft;
+                if (typeof this._proxy.BatteryRight !== 'undefined') _s.battery_right = this._proxy.BatteryRight;
+                if (typeof this._proxy.BatteryCase !== 'undefined') _s.battery_case = this._proxy.BatteryCase;
+                if (typeof this._proxy.AncMode !== 'undefined') _s.anc_mode = this._proxy.AncMode;
+                if (typeof this._proxy.AncDepth !== 'undefined') _s.anc_depth = this._proxy.AncDepth;
+                if (typeof this._proxy.TransparencySubmode !== 'undefined') _s.trans_submode = this._proxy.TransparencySubmode;
+                if (typeof this._proxy.EqMode !== 'undefined') _s.eq_mode = this._proxy.EqMode;
+                if (typeof this._proxy.ImmersiveCommute !== 'undefined') _s.commute_mode = this._proxy.ImmersiveCommute;
+                if (typeof this._proxy.AudioMode !== 'undefined') _s.audio_mode = this._proxy.AudioMode;
+                if (typeof this._proxy.HeadTracking !== 'undefined') _s.head_tracking = Boolean(this._proxy.HeadTracking);
+                if (typeof this._proxy.LeMode !== 'undefined') _s.le_mode = Boolean(this._proxy.LeMode);
+                if (typeof this._proxy.DualConnection !== 'undefined') _s.dual_connect = Boolean(this._proxy.DualConnection);
+                if (typeof this._proxy.InEarDetection !== 'undefined') _s.in_ear_det = Boolean(this._proxy.InEarDetection);
+            } catch (propErr) {
+                console.warn('Initial properties fetch warning:', propErr);
+            }
+
             this._refreshUI();
         } catch (e) {
             console.error('Buds D-Bus connection error:', e);
@@ -313,7 +340,6 @@ class BudsIndicator extends PanelMenu.Button {
     _refreshUI() {
         this._updating = true;
         try {
-            this.visible = Boolean(_s.connected);
             this._updateThemeClass();
 
             const fmt = (v, chg) => {
@@ -442,11 +468,12 @@ class BudsIndicator extends PanelMenu.Button {
 
     /* ── Pill Button Factory ─────────────────────────────── */
     _pill(iconId, value, tooltip, cb) {
-        let icon = new St.Icon({
-            icon_name: `${iconId}-symbolic`,
-            icon_size: 18,
-            style_class: 'buds-pill-icon',
-        });
+        let customPath = GLib.build_filenamev([
+            this._extensionPath, 'icons', `${iconId}-symbolic.svg`
+        ]);
+        let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
+            ? new St.Icon({ gicon: this._gicon(iconId), icon_size: 18, style_class: 'buds-pill-icon' })
+            : new St.Icon({ icon_name: `${iconId}-symbolic`, icon_size: 18, style_class: 'buds-pill-icon' });
 
         let btn = new St.Button({
             style_class: 'buds-pill-button',
@@ -508,12 +535,12 @@ class BudsIndicator extends PanelMenu.Button {
                 x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.CENTER,
             });
-            let icon = new St.Icon({
-                icon_name: `${iconName}-symbolic`,
-                icon_size: 16,
-                style_class: 'buds-batt-icon',
-                y_align: Clutter.ActorAlign.CENTER,
-            });
+            let customPath = GLib.build_filenamev([
+                this._extensionPath, 'icons', `${iconName}-symbolic.svg`
+            ]);
+            let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
+                ? new St.Icon({ gicon: this._gicon(iconName), icon_size: 16, style_class: 'buds-batt-icon', y_align: Clutter.ActorAlign.CENTER })
+                : new St.Icon({ icon_name: `${iconName}-symbolic`, icon_size: 16, style_class: 'buds-batt-icon', y_align: Clutter.ActorAlign.CENTER });
             let val = new St.Label({
                 text: '--',
                 style_class: 'buds-battery-value',
