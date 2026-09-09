@@ -266,6 +266,13 @@ class BudsIndicator extends PanelMenu.Button {
         this._connectDBus();
     }
 
+    _gicon(name) {
+        let file = Gio.File.new_for_path(
+            GLib.build_filenamev([this._extensionPath, 'icons', `${name}-symbolic.svg`])
+        );
+        return new Gio.FileIcon({ file });
+    }
+
     async _connectDBus() {
         try {
             this._proxy = await new Promise((resolve, reject) => {
@@ -447,11 +454,12 @@ class BudsIndicator extends PanelMenu.Button {
 
     /* ── Pill Button Factory ─────────────────────────────── */
     _pill(iconId, value, tooltip, cb) {
-        let icon = new St.Icon({
-            icon_name: `${iconId}-symbolic`,
-            icon_size: 18,
-            style_class: 'buds-pill-icon',
-        });
+        let customPath = GLib.build_filenamev([
+            this._extensionPath, 'icons', `${iconId}-symbolic.svg`
+        ]);
+        let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
+            ? new St.Icon({ gicon: this._gicon(iconId), icon_size: 18, style_class: 'buds-pill-icon' })
+            : new St.Icon({ icon_name: `${iconId}-symbolic`, icon_size: 18, style_class: 'buds-pill-icon' });
 
         let btn = new St.Button({
             style_class: 'buds-pill-button',
@@ -513,12 +521,12 @@ class BudsIndicator extends PanelMenu.Button {
                 x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.CENTER,
             });
-            let icon = new St.Icon({
-                icon_name: `${iconName}-symbolic`,
-                icon_size: 16,
-                style_class: 'buds-batt-icon',
-                y_align: Clutter.ActorAlign.CENTER,
-            });
+            let customPath = GLib.build_filenamev([
+                this._extensionPath, 'icons', `${iconName}-symbolic.svg`
+            ]);
+            let icon = GLib.file_test(customPath, GLib.FileTest.EXISTS)
+                ? new St.Icon({ gicon: this._gicon(iconName), icon_size: 16, style_class: 'buds-batt-icon', y_align: Clutter.ActorAlign.CENTER })
+                : new St.Icon({ icon_name: `${iconName}-symbolic`, icon_size: 16, style_class: 'buds-batt-icon', y_align: Clutter.ActorAlign.CENTER });
             let val = new St.Label({
                 text: '--',
                 style_class: 'buds-battery-value',
