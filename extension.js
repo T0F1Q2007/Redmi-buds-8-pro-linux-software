@@ -248,8 +248,8 @@ class BudsIndicator extends PanelMenu.Button {
             this._updateThemeClass();
         });
 
-        // Register custom icons directory with St.IconTheme
-        let iconTheme = new St.IconTheme();
+        // Register custom icons directory with the default St.IconTheme
+        let iconTheme = St.IconTheme.get_default();
         let iconDir = GLib.build_filenamev([this._extensionPath, 'icons']);
         if (!iconTheme.get_search_path().includes(iconDir)) {
             iconTheme.prepend_search_path(iconDir);
