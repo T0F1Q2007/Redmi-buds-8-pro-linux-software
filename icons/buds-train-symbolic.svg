@@ -1,3 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <path fill-rule="evenodd" d="M4 1.5C2.9 1.5 2 2.4 2 3.5v8c0 .8.5 1.5 1.2 1.8l-1.4 1.4.7.7 1.5-1.5h8l1.5 1.5.7-.7-1.4-1.4c.7-.3 1.2-1 1.2-1.8v-8c0-1.1-.9-2-2-2H4zm0 2h8c.3 0 .5.2.5.5v3c0 .3-.2.5-.5.5H4c-.3 0-.5-.2-.5-.5v-3c0-.3.2-.5.5-.5zm1 6.5a1 1 0 1 1 2 0 1 1 0 0 1-2 0zm5 0a1 1 0 1 1 2 0 1 1 0 0 1-2 0z" fill="#2e3436"/>
+  <rect x="4" y="2" width="8" height="10" rx="2" fill="#2e3436"/>
+  <rect x="5.5" y="4" width="5" height="3" rx="1" fill="white"/>
+  <circle cx="6.5" cy="10" r="1" fill="white"/>
+  <circle cx="9.5" cy="10" r="1" fill="white"/>
+  <line x1="4" y1="13" x2="3" y2="14.5" stroke="#2e3436" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="12" y1="13" x2="13" y2="14.5" stroke="#2e3436" stroke-width="1.2" stroke-linecap="round"/>
 </svg>

@@ -109,7 +109,7 @@ const FEATURES = [
         get: s => s.audio_mode,
         set: (proxy, val) => proxy.SetAudioModeRemote(val),
         items: [
-            { icon: 'buds-stereo', value: 0, title: 'Off (Stereo)' },
+            { icon: 'buds-noise-off', value: 0, title: 'Off (Stereo)' },
             { icon: 'buds-dolby', value: 1, title: 'Dolby Audio' },
             { icon: 'buds-xiaomi', value: 2, title: 'Xiaomi Immersive' },
         ],
