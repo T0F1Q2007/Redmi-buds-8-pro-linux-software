@@ -131,10 +131,15 @@ const FEATURES = [
         items: [
             {
                 id: 'le_mode',
-                label: 'LE Mode (Low Latency)',
+                label: 'Bluetooth LE Audio Connection',
                 get: s => s.le_mode,
                 set: (proxy, st, ctx) => {
                     proxy.SetLeModeRemote(st);
+                    let scriptPath = GLib.build_filenamev([ctx._extensionPath, 'scripts', 'switch_transport.sh']);
+                    let action = st ? 'le' : 'classic';
+                    if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {
+                        GLib.spawn_command_line_async(`bash "${scriptPath}" ${action}`);
+                    }
                     let soundFile = st ? 'le_on.wav' : 'le_off.wav';
                     let soundPath = GLib.build_filenamev([ctx._extensionPath, 'sounds', soundFile]);
                     if (GLib.file_test(soundPath, GLib.FileTest.EXISTS)) {
