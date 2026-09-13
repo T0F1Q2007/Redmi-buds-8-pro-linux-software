@@ -38,7 +38,7 @@ let _s = {
     charging_left: false, charging_right: false, charging_case: false,
     anc_mode: 0, anc_depth: 0, trans_submode: 2, eq_mode: 1,
     commute_mode: 0, in_ear_det: true, audio_mode: 0, head_tracking: false,
-    le_mode: false, dual_connect: true, le_transport: false,
+    le_mode: false, dual_connect: true,
 };
 
 /* ─── Declarative Features Schema ────────────────────────── */
@@ -131,7 +131,7 @@ const FEATURES = [
         items: [
             {
                 id: 'gaming_mode',
-                label: 'Gaming Mode (Low Latency DSP)',
+                label: 'Gaming Mode (Low Latency)',
                 get: s => s.le_mode,
                 set: (proxy, st, ctx) => {
                     proxy.SetLeModeRemote(st);
@@ -139,19 +139,6 @@ const FEATURES = [
                     let soundPath = GLib.build_filenamev([ctx._extensionPath, 'sounds', soundFile]);
                     if (GLib.file_test(soundPath, GLib.FileTest.EXISTS)) {
                         GLib.spawn_command_line_async(`paplay "${soundPath}"`);
-                    }
-                },
-            },
-            {
-                id: 'le_transport',
-                label: 'Bluetooth LE Audio Connection',
-                get: s => s.le_transport,
-                set: (_proxy, st, ctx) => {
-                    _s.le_transport = st;
-                    let scriptPath = GLib.build_filenamev([ctx._extensionPath, 'scripts', 'switch_transport.sh']);
-                    let action = st ? 'le' : 'classic';
-                    if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {
-                        GLib.spawn_command_line_async(`bash "${scriptPath}" ${action}`);
                     }
                 },
             },
@@ -313,15 +300,6 @@ class BudsIndicator extends PanelMenu.Button {
                 if (typeof this._proxy.LeMode !== 'undefined') _s.le_mode = Boolean(this._proxy.LeMode);
                 if (typeof this._proxy.DualConnection !== 'undefined') _s.dual_connect = Boolean(this._proxy.DualConnection);
                 if (typeof this._proxy.InEarDetection !== 'undefined') _s.in_ear_det = Boolean(this._proxy.InEarDetection);
-
-                let scriptPath = GLib.build_filenamev([this._extensionPath, 'scripts', 'switch_transport.sh']);
-                if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {
-                    try {
-                        let [, out] = GLib.spawn_command_line_sync(`bash "${scriptPath}" status`);
-                        let statusStr = new TextDecoder().decode(out).trim();
-                        _s.le_transport = (statusStr === 'LE');
-                    } catch (_) {}
-                }
             } catch (propErr) {
                 console.warn('Initial properties fetch warning:', propErr);
             }
