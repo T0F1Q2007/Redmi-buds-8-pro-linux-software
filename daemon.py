@@ -263,6 +263,12 @@ class BudsConnection:
                 except Exception:
                     pass
                 self.sock = None
+            self.battery_left   = -1
+            self.battery_right  = -1
+            self.battery_case   = -1
+            self.charging_left  = False
+            self.charging_right = False
+            self.charging_case  = False
         self._stop_periodic_query()
         log.info("Disconnected from earbuds.")
         self.notify_state_change()
@@ -361,6 +367,15 @@ class BudsInterface:
 
     def _emit_state(self):
         self.StateChanged(json.dumps(self.conn.get_state_dict()))
+
+    def GetState(self) -> Str:
+        """Return full JSON telemetry state."""
+        return json.dumps(self.conn.get_state_dict())
+
+    def SendRaw(self, svc_hex: Str, payload_hex: Str) -> Str:
+        log.info(f"DBus SendRaw(svc={svc_hex}, payload={payload_hex})")
+        success = self.conn.send_cmd(svc_hex, payload_hex)
+        return "OK" if success else "FAIL"
 
     def SetAncMode(self, mode: Int):
         self.conn.anc_mode = mode

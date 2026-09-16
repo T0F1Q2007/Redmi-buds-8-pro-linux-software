@@ -17,6 +17,7 @@ const DBUS_PATH    = '/org/redmibuds8/Control';
 const DBusProxy = Gio.DBusProxy.makeProxyWrapper(`
 <node>
     <interface name="org.redmibuds8.Control">
+        <method name="GetState"><arg type="s" name="state_json" direction="out"/></method>
         <method name="SetAncMode"><arg type="i" name="mode" direction="in"/></method>
         <method name="SetAncDepth"><arg type="i" name="depth" direction="in"/></method>
         <method name="SetTransparencySubmode"><arg type="i" name="submode" direction="in"/></method>
@@ -28,6 +29,20 @@ const DBusProxy = Gio.DBusProxy.makeProxyWrapper(`
         <method name="SetLeMode"><arg type="b" name="enabled" direction="in"/></method>
         <method name="SetDualConnection"><arg type="b" name="enabled" direction="in"/></method>
         <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
+        <property name="Connected" type="b" access="read"/>
+        <property name="BatteryLeft" type="i" access="read"/>
+        <property name="BatteryRight" type="i" access="read"/>
+        <property name="BatteryCase" type="i" access="read"/>
+        <property name="AncMode" type="i" access="read"/>
+        <property name="AncDepth" type="i" access="read"/>
+        <property name="TransparencySubmode" type="i" access="read"/>
+        <property name="EqMode" type="i" access="read"/>
+        <property name="ImmersiveCommute" type="i" access="read"/>
+        <property name="InEarDetection" type="b" access="read"/>
+        <property name="AudioMode" type="i" access="read"/>
+        <property name="HeadTracking" type="b" access="read"/>
+        <property name="LeMode" type="b" access="read"/>
+        <property name="DualConnection" type="b" access="read"/>
     </interface>
 </node>
 `);
@@ -257,6 +272,11 @@ class BudsIndicator extends PanelMenu.Button {
         this.add_child(this._icon);
 
         this._buildMenu();
+        this.menu.connect('open-state-changed', (_menu, isOpen) => {
+            if (isOpen) {
+                this._syncStateFromDaemon();
+            }
+        });
         this._connectDBus();
     }
 
@@ -284,7 +304,25 @@ class BudsIndicator extends PanelMenu.Button {
                 }
             );
 
-            // Fetch initial state from D-Bus properties
+            this._syncStateFromDaemon();
+        } catch (e) {
+            console.error('Buds D-Bus connection error:', e);
+        }
+    }
+
+    _syncStateFromDaemon() {
+        if (!this._proxy) return;
+        this._proxy.GetStateRemote((result, err) => {
+            if (!err && result && result[0]) {
+                try {
+                    Object.assign(_s, JSON.parse(result[0]));
+                    this._refreshUI();
+                    return;
+                } catch (parseErr) {
+                    console.error('Failed to parse GetState JSON:', parseErr);
+                }
+            }
+            // Fallback to reading D-Bus properties
             try {
                 if (typeof this._proxy.Connected !== 'undefined') _s.connected = Boolean(this._proxy.Connected);
                 if (typeof this._proxy.BatteryLeft !== 'undefined') _s.battery_left = this._proxy.BatteryLeft;
@@ -300,14 +338,11 @@ class BudsIndicator extends PanelMenu.Button {
                 if (typeof this._proxy.LeMode !== 'undefined') _s.le_mode = Boolean(this._proxy.LeMode);
                 if (typeof this._proxy.DualConnection !== 'undefined') _s.dual_connect = Boolean(this._proxy.DualConnection);
                 if (typeof this._proxy.InEarDetection !== 'undefined') _s.in_ear_det = Boolean(this._proxy.InEarDetection);
+                this._refreshUI();
             } catch (propErr) {
-                console.warn('Initial properties fetch warning:', propErr);
+                console.warn('Fallback properties fetch warning:', propErr);
             }
-
-            this._refreshUI();
-        } catch (e) {
-            console.error('Buds D-Bus connection error:', e);
-        }
+        });
     }
 
     _isLightMode() {

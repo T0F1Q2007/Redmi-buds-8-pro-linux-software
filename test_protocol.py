@@ -107,6 +107,49 @@ class TestStreamParser(unittest.TestCase):
         self.assertIsInstance(events[1], p.DualConnectionEvent)
         self.assertTrue(events[1].enabled)
 
+    def test_f400_notifications(self):
+        # ANC Depth Smart
+        frame_smart = bytes.fromhex("fedcbac7f400060804000b0000ef")
+        ev_smart, _ = p.parse_stream(frame_smart)
+        self.assertEqual(len(ev_smart), 1)
+        self.assertIsInstance(ev_smart[0], p.AncDepthEvent)
+        self.assertEqual(ev_smart[0].depth, 0)
+
+        # Commute mode Train (mode 1)
+        frame_commute = bytes.fromhex("fedcbac7f40006160400670102ef")
+        ev_commute, _ = p.parse_stream(frame_commute)
+        self.assertEqual(len(ev_commute), 1)
+        self.assertIsInstance(ev_commute[0], p.CommuteModeEvent)
+        self.assertEqual(ev_commute[0].mode, 1)
+
+        # Transparency Ambience (mode 1)
+        frame_trans = bytes.fromhex("fedcbac7f400060204000b0201ef")
+        ev_trans, _ = p.parse_stream(frame_trans)
+        self.assertEqual(len(ev_trans), 1)
+        self.assertIsInstance(ev_trans[0], p.TransparencySubmodeEvent)
+        self.assertEqual(ev_trans[0].submode, 1)
+
+        # In-ear detection enabled
+        frame_inear = bytes.fromhex("fedcbac7f400051203002501ef")
+        ev_inear, _ = p.parse_stream(frame_inear)
+        self.assertEqual(len(ev_inear), 1)
+        self.assertIsInstance(ev_inear[0], p.InEarDetectionEvent)
+        self.assertTrue(ev_inear[0].enabled)
+
+    def test_0e00_battery_notification(self):
+        # Left: 65% charging, Right: 65% discharging, Case: 100% discharging
+        frame_batt = bytes.fromhex("fedcbac70e0006060400c14164ef")
+        ev_batt, _ = p.parse_stream(frame_batt)
+        self.assertEqual(len(ev_batt), 1)
+        self.assertIsInstance(ev_batt[0], p.BatteryEvent)
+        self.assertEqual(ev_batt[0].left, 65)
+        self.assertTrue(ev_batt[0].charging_left)
+        self.assertEqual(ev_batt[0].right, 65)
+        self.assertFalse(ev_batt[0].charging_right)
+        self.assertEqual(ev_batt[0].case, 100)
+        self.assertFalse(ev_batt[0].charging_case)
+
 
 if __name__ == '__main__':
     unittest.main()
+

@@ -20,6 +20,7 @@ SVC_QUERY      = 0x0200
 SVC_ANC        = 0x0800
 SVC_ANC_ALT    = 0x0E00
 SVC_EXT        = 0xF200
+SVC_NOTIF      = 0xF400
 
 
 # ─── Telemetry Event Definitions ──────────────────────────────
@@ -206,27 +207,61 @@ def parse_notification(svc: int, payload: bytes) -> Optional[ProtocolEvent]:
                 return AncModeEvent(mode=payload[2])
             elif payload[1] == 0x06:
                 return InEarDetectionEvent(enabled=bool(payload[2]))
+        # Battery notification in 0E00: 04 00 [raw_l] [raw_r] [raw_c]
+        elif len(payload) >= 5 and payload[:2] == b'\x04\x00':
+            l_level, l_chg = _decode_battery_byte(payload[2])
+            r_level, r_chg = _decode_battery_byte(payload[3])
+            c_level, c_chg = _decode_battery_byte(payload[4])
+            return BatteryEvent(
+                left=l_level, charging_left=l_chg,
+                right=r_level, charging_right=r_chg,
+                case=c_level, charging_case=c_chg
+            )
 
-    elif svc == SVC_EXT and len(payload) >= 4:
-        if payload[:4] == b'\x04\x00\x0b\x01' and len(payload) >= 5:
-            if payload[4] in (0, 1, 2, 3):
-                return AncDepthEvent(depth=payload[4])
-        elif payload[:4] == b'\x04\x00\x0b\x02' and len(payload) >= 5:
-            if payload[4] in (0, 1, 2):
-                return TransparencySubmodeEvent(submode=payload[4])
-        elif payload[:3] == b'\x03\x00\x1d':
+    elif svc in (SVC_EXT, SVC_NOTIF) and len(payload) >= 3:
+        # ANC Depth & Smart ANC: 04 00 0b 01 [depth], 04 00 0b 00 [depth], or 04 00 0b 02 [submode]
+        if payload[:3] == b'\x04\x00\x0b' and len(payload) >= 5:
+            subgroup = payload[3]
+            val = payload[4]
+            if subgroup in (0, 1):
+                if val in (0, 1, 2, 3):
+                    return AncDepthEvent(depth=val)
+                elif val == 0x13:
+                    return AncDepthEvent(depth=val & 0x0F)
+            elif subgroup == 2 and val in (0, 1, 2):
+                return TransparencySubmodeEvent(submode=val)
+
+        # Commute Mode: 04 00 67 [mode] [sub] or 03 00 67 [mode]
+        elif payload[:3] == b'\x04\x00\x67' and len(payload) >= 4:
+            if payload[3] in (0, 1, 2, 3):
+                return CommuteModeEvent(mode=payload[3])
+        elif payload[:3] == b'\x03\x00\x67' and len(payload) >= 4:
+            if payload[3] in (0, 1, 2, 3):
+                return CommuteModeEvent(mode=payload[3])
+
+        # In-Ear Detection: 03 00 24 [val], 04 00 24 [val], 03 00 25 [val]
+        elif payload[:3] in (b'\x03\x00\x24', b'\x04\x00\x24', b'\x03\x00\x25') and len(payload) >= 4:
+            return InEarDetectionEvent(enabled=bool(payload[3]))
+
+        # Dual Connection (Multipoint): 03 00 04 [val]
+        elif payload[:3] == b'\x03\x00\x04' and len(payload) >= 4:
+            return DualConnectionEvent(enabled=bool(payload[3]))
+
+        # LE / Gaming Mode (Low Latency): 03 00 28 [val], 03 00 07 [val]
+        elif payload[:3] in (b'\x03\x00\x28', b'\x03\x00\x07') and len(payload) >= 4:
+            return LeModeEvent(enabled=(payload[3] == 0x00))
+
+        # Spatial Audio Mode: 03 00 1d [val]
+        elif payload[:3] == b'\x03\x00\x1d' and len(payload) >= 4:
             mode = {0x03: 0, 0x0A: 1, 0x0B: 2}.get(payload[3])
             if mode is not None:
                 return AudioModeEvent(mode=mode)
-        elif payload[:3] == b'\x03\x00\x68':
+
+        # Head Tracking: 03 00 68 [val] or IMU streaming packet 0a 00 22 ...
+        elif payload[:3] == b'\x03\x00\x68' and len(payload) >= 4:
             return HeadTrackingEvent(enabled=(payload[3] != 0x01))
-        elif payload[:3] == b'\x03\x00\x67':
-            if payload[3] in (0, 1, 2, 3):
-                return CommuteModeEvent(mode=payload[3])
-        elif payload[:3] in (b'\x03\x00\x28', b'\x03\x00\x07'):
-            return LeModeEvent(enabled=(payload[3] == 0x00))
-        elif payload[:3] == b'\x03\x00\x04':
-            return DualConnectionEvent(enabled=bool(payload[3]))
+        elif payload[:3] == b'\x0a\x00\x22':
+            return HeadTrackingEvent(enabled=True)
 
     return None
 
