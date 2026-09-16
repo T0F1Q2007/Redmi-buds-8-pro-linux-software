@@ -423,9 +423,10 @@ class BudsInterface:
 
     def SetHeadTracking(self, enabled: Bool):
         self.conn.head_tracking = enabled
+        old_audio_mode = self.conn.audio_mode
         if enabled and self.conn.audio_mode != 2:
             self.conn.audio_mode = 2
-        frames, next_seq = proto.encode_head_tracking(enabled, self.conn.next_seq(), self.conn.audio_mode)
+        frames, next_seq = proto.encode_head_tracking(enabled, self.conn.next_seq(), old_audio_mode)
         for f in frames:
             self.conn.send_bytes(f)
         self.conn.set_seq(next_seq)

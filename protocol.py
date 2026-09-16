@@ -145,12 +145,10 @@ def encode_head_tracking(enabled: bool, seq_start: int, current_audio_mode: int)
         if current_audio_mode != 2:
             frames.append(build_frame(SVC_EXT, b'\x03\x00\x1d\x0b', seq))
             seq = (seq + 1) % 256
-        frames.append(build_frame(SVC_EXT, b'\x03\x00\x68\x00', seq))
-        seq = (seq + 1) % 256
-        frames.append(build_frame(SVC_EXT, b'\x03\x00\x68\x02', seq))
+        frames.append(build_frame(SVC_EXT, b'\x03\x00\x68\x01', seq))
         seq = (seq + 1) % 256
     else:
-        frames.append(build_frame(SVC_EXT, b'\x03\x00\x68\x01', seq))
+        frames.append(build_frame(SVC_EXT, b'\x03\x00\x68\x00', seq))
         seq = (seq + 1) % 256
     return frames, seq
 
@@ -259,7 +257,7 @@ def parse_notification(svc: int, payload: bytes) -> Optional[ProtocolEvent]:
 
         # Head Tracking: 03 00 68 [val] or IMU streaming packet 0a 00 22 ...
         elif payload[:3] == b'\x03\x00\x68' and len(payload) >= 4:
-            return HeadTrackingEvent(enabled=(payload[3] != 0x01))
+            return HeadTrackingEvent(enabled=(payload[3] == 0x01))
         elif payload[:3] == b'\x0a\x00\x22':
             return HeadTrackingEvent(enabled=True)
 
