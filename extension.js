@@ -671,9 +671,19 @@ class BudsIndicator extends PanelMenu.Button {
         slBox.add_child(new St.Label({ text: config.label, style_class: 'buds-slider-label' }));
 
         let slider = new Slider.Slider(0.5);
+        let debounceTimer = null;
         slider.connect('notify::value', () => {
             if (this._updating || !this._proxy) return;
-            config.set(this._proxy, slider.value);
+            if (debounceTimer) {
+                GLib.source_remove(debounceTimer);
+                debounceTimer = null;
+            }
+            debounceTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+                debounceTimer = null;
+                if (!this._proxy || this._updating) return GLib.SOURCE_REMOVE;
+                config.set(this._proxy, slider.value);
+                return GLib.SOURCE_REMOVE;
+            });
         });
         this._setupKeyNav(slider);
         slBox.add_child(slider);

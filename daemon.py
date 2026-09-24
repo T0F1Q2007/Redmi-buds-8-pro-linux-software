@@ -113,27 +113,37 @@ class BudsConnection:
             log.warning(f"Error querying BlueZ connection state: {e}")
             return False
 
+    def _force_disconnect(self):
+        """Cleanly abort active socket to unblock any waiting recv() threads and reset connection state."""
+        old_sock = None
+        with self.lock:
+            self.connected = False
+            old_sock = self.sock
+            self.sock = None
+            self.battery_left   = -1
+            self.battery_right  = -1
+            self.battery_case   = -1
+            self.charging_left  = False
+            self.charging_right = False
+            self.charging_case  = False
+        if old_sock:
+            try:
+                old_sock.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            try:
+                old_sock.close()
+            except Exception:
+                pass
+        self._stop_periodic_query()
+        self.notify_state_change()
+
     def connect_loop(self, system_bus):
         """Event-driven RFCOMM loop: connects ONLY when BlueZ is actively paired/connected."""
         while True:
             if not self.is_bluez_connected(system_bus):
-                was_connected = False
-                with self.lock:
-                    if self.connected or self.sock is not None:
-                        was_connected = True
-                        self.connected = False
-                        self.battery_left  = -1
-                        self.battery_right = -1
-                        self.battery_case  = -1
-                        if self.sock:
-                            try:
-                                self.sock.close()
-                            except Exception:
-                                pass
-                        self.sock = None
-                if was_connected:
-                    self._stop_periodic_query()
-                    self.notify_state_change()
+                if self.connected or self.sock is not None:
+                    self._force_disconnect()
                     log.info("Earbuds disconnected in BlueZ. Sleeping RFCOMM without polling.")
                 time.sleep(3)
                 continue
@@ -153,16 +163,7 @@ class BudsConnection:
                     self._start_periodic_query()
                     self.listen_loop()
                 except Exception as e:
-                    with self.lock:
-                        self.connected = False
-                        if self.sock:
-                            try:
-                                self.sock.close()
-                            except Exception:
-                                pass
-                        self.sock = None
-                    self._stop_periodic_query()
-                    self.notify_state_change()
+                    self._force_disconnect()
                     log.warning(f"RFCOMM connection attempt failed: {e}. Retrying in 5s...")
                     time.sleep(5)
             else:
@@ -184,31 +185,24 @@ class BudsConnection:
     def accept_connection(self, fd: int):
         """Handle BlueZ Profile1 inbound connection handoff."""
         try:
+            self._force_disconnect()
             s = socket.fromfd(fd, socket.AF_BLUETOOTH, socket.SOCK_STREAM)
             try:
                 os.close(fd)
             except Exception:
                 pass
+            s.setblocking(True)
+            s.settimeout(None)
             with self.lock:
                 self.sock      = s
                 self.connected = True
-            log.info(f"Inbound RFCOMM connection accepted.")
+            log.info("Inbound RFCOMM connection accepted.")
             self.notify_state_change()
             self._start_periodic_query()
             self.listen_loop()
         except Exception as e:
             log.warning(f"accept_connection failed: {e}")
-        finally:
-            with self.lock:
-                self.connected = False
-                if self.sock:
-                    try:
-                        self.sock.close()
-                    except Exception:
-                        pass
-                    self.sock = None
-            self._stop_periodic_query()
-            self.notify_state_change()
+            self._force_disconnect()
 
     def next_seq(self) -> int:
         with self.lock:
@@ -220,17 +214,19 @@ class BudsConnection:
             self.seq = seq % 256
 
     def send_bytes(self, cmd_bytes: bytes) -> bool:
-        if not self.connected or not self.sock:
+        if not self.connected:
+            return False
+        with self.lock:
+            sock = self.sock
+        if not sock:
             return False
         try:
-            self.sock.send(cmd_bytes)
+            sock.send(cmd_bytes)
             log.info(f"Sent command: {cmd_bytes.hex()}")
             return True
         except Exception as e:
             log.warning(f"Failed to send command: {e}")
-            with self.lock:
-                self.connected = False
-            self.notify_state_change()
+            self._force_disconnect()
             return False
 
     def send_cmd(self, svc_hex: str, payload_hex: str) -> bool:
@@ -246,32 +242,23 @@ class BudsConnection:
         GLib.idle_add(self.query_status)
         self._recv_buffer = b""
         while self.connected:
+            sock = None
+            with self.lock:
+                sock = self.sock
+            if not sock or not self.connected:
+                break
             try:
-                data = self.sock.recv(1024)
+                data = sock.recv(1024)
                 if not data:
                     break
                 log.info(f"Received from earbuds: {data.hex()}")
                 self._parse_incoming(data)
             except Exception as e:
-                log.warning(f"Error reading socket: {e}")
+                if self.connected:
+                    log.warning(f"Error reading socket: {e}")
                 break
-        with self.lock:
-            self.connected = False
-            if self.sock:
-                try:
-                    self.sock.close()
-                except Exception:
-                    pass
-                self.sock = None
-            self.battery_left   = -1
-            self.battery_right  = -1
-            self.battery_case   = -1
-            self.charging_left  = False
-            self.charging_right = False
-            self.charging_case  = False
-        self._stop_periodic_query()
+        self._force_disconnect()
         log.info("Disconnected from earbuds.")
-        self.notify_state_change()
 
     def _parse_incoming(self, data: bytes):
         self._recv_buffer += data
@@ -348,12 +335,8 @@ class XiaomiProfile(dbus.service.Object):
 
     @dbus.service.method("org.bluez.Profile1", in_signature="o", out_signature="")
     def RequestDisconnection(self, path):
-        self._conn.connected = False
-        if self._conn.sock:
-            try:
-                self._conn.sock.close()
-            except Exception:
-                pass
+        log.info("BlueZ requested profile disconnection.")
+        self._conn._force_disconnect()
 
 
 @dbus_interface(DBUS_SERVICE)
