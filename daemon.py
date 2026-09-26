@@ -97,7 +97,7 @@ class BudsConnection:
             GLib.idle_add(self.state_callback)
 
     def is_bluez_connected(self, system_bus):
-        """Check if BlueZ reports an active Bluetooth connection across any hci controller."""
+        """Returns tuple (is_connected, device_path) for the target earbuds."""
         try:
             manager = dbus.Interface(system_bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
             objects = manager.GetManagedObjects()
@@ -105,13 +105,12 @@ class BudsConnection:
             for path, interfaces in objects.items():
                 if "org.bluez.Device1" in interfaces:
                     dev_props = interfaces["org.bluez.Device1"]
-                    addr = str(dev_props.get("Address", "")).upper()
-                    if addr == target_mac:
-                        return bool(dev_props.get("Connected", False))
-            return False
+                    if str(dev_props.get("Address", "")).upper() == target_mac:
+                        return bool(dev_props.get("Connected", False)), path
+            return False, None
         except Exception as e:
             log.warning(f"Error querying BlueZ connection state: {e}")
-            return False
+            return False, None
 
     def _force_disconnect(self):
         """Cleanly abort active socket to unblock any waiting recv() threads and reset connection state."""
@@ -138,34 +137,57 @@ class BudsConnection:
         self._stop_periodic_query()
         self.notify_state_change()
 
+    def _manual_connect(self):
+        try:
+            log.info(f"Manually connecting RFCOMM {MAC_ADDRESS}:{RFCOMM_PORT}...")
+            s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+            s.settimeout(8)
+            s.connect((MAC_ADDRESS, RFCOMM_PORT))
+            s.settimeout(None)
+            
+            self._force_disconnect()
+            with self.lock:
+                self.sock      = s
+                self.connected = True
+            log.info("Connected to earbuds RFCOMM manually.")
+            self.notify_state_change()
+            
+            # Start listen loop in background so connect_loop can continue monitoring
+            from threading import Thread
+            Thread(target=self.listen_loop, daemon=True).start()
+        except Exception as e:
+            self._force_disconnect()
+            log.warning(f"Manual RFCOMM connection failed: {e}")
+
     def connect_loop(self, system_bus):
-        """Event-driven RFCOMM loop: connects ONLY when BlueZ is actively paired/connected."""
+        """Event-driven RFCOMM loop: Uses BlueZ Profile API to maintain active link state."""
         while True:
-            if not self.is_bluez_connected(system_bus):
+            is_conn, device_path = self.is_bluez_connected(system_bus)
+            
+            if not is_conn:
                 if self.connected or self.sock is not None:
                     self._force_disconnect()
                     log.info("Earbuds disconnected in BlueZ. Sleeping RFCOMM without polling.")
                 time.sleep(3)
                 continue
 
-            if not self.connected:
+            if not self.connected and device_path:
                 try:
-                    log.info(f"Earbuds active in BlueZ. Connecting RFCOMM {MAC_ADDRESS}:{RFCOMM_PORT}...")
-                    s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-                    s.settimeout(8)
-                    s.connect((MAC_ADDRESS, RFCOMM_PORT))
-                    s.settimeout(None)
-                    with self.lock:
-                        self.sock      = s
-                        self.connected = True
-                    log.info("Connected to earbuds RFCOMM successfully.")
-                    self.notify_state_change()
-                    self._start_periodic_query()
-                    self.listen_loop()
+                    log.info(f"Earbuds active in BlueZ. Triggering ConnectProfile({XIAOMI_UUID})...")
+                    dev = dbus.Interface(system_bus.get_object("org.bluez", device_path), "org.bluez.Device1")
+                    dev.ConnectProfile(XIAOMI_UUID)
+                except dbus.exceptions.DBusException as e:
+                    err = str(e)
+                    if "Not Supported" in err or "ProfileUnavailable" in err:
+                        log.warning(f"ConnectProfile rejected ({err}). Falling back to manual socket...")
+                        self._manual_connect()
+                    elif "Already connected" not in err and "In Progress" not in err:
+                        log.warning(f"BlueZ ConnectProfile failed: {err}")
                 except Exception as e:
-                    self._force_disconnect()
-                    log.warning(f"RFCOMM connection attempt failed: {e}. Retrying in 5s...")
-                    time.sleep(5)
+                    log.warning(f"Unexpected ConnectProfile error: {e}")
+                
+                # Give NewConnection or fallback time to establish
+                time.sleep(5)
             else:
                 time.sleep(2)
 
@@ -198,7 +220,6 @@ class BudsConnection:
                 self.connected = True
             log.info("Inbound RFCOMM connection accepted.")
             self.notify_state_change()
-            self._start_periodic_query()
             self.listen_loop()
         except Exception as e:
             log.warning(f"accept_connection failed: {e}")

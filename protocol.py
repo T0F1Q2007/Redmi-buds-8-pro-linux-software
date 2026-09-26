@@ -153,14 +153,6 @@ def encode_head_tracking(enabled: bool, seq_start: int, current_audio_mode: int)
     return frames, seq
 
 
-def encode_le_mode(enabled: bool, seq_start: int) -> Tuple[List[bytes], int]:
-    """Return frames to toggle LE mode and the next sequence counter."""
-    val = 0 if enabled else 1
-    seq = seq_start
-    frames = [
-        build_frame(SVC_EXT, bytes([0x03, 0x00, 0x28, val]), seq),
-        build_frame(SVC_EXT, bytes([0x03, 0x00, 0x07, val]), (seq + 1) % 256),
-    ]
     return frames, (seq + 2) % 256
 
 

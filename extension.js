@@ -145,19 +145,6 @@ const FEATURES = [
         type: 'switches',
         items: [
             {
-                id: 'gaming_mode',
-                label: 'Gaming Mode (Low Latency)',
-                get: s => s.le_mode,
-                set: (proxy, st, ctx) => {
-                    proxy.SetLeModeRemote(st);
-                    let soundFile = st ? 'le_on.wav' : 'le_off.wav';
-                    let soundPath = GLib.build_filenamev([ctx._extensionPath, 'sounds', soundFile]);
-                    if (GLib.file_test(soundPath, GLib.FileTest.EXISTS)) {
-                        GLib.spawn_command_line_async(`paplay "${soundPath}"`);
-                    }
-                },
-            },
-            {
                 id: 'dual_connect',
                 label: 'Dual Connection',
                 get: s => s.dual_connect,
