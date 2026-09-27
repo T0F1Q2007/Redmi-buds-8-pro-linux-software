@@ -290,7 +290,8 @@ class BudsConnection:
         state_changed = False
         for event in events:
             if isinstance(event, proto.HeartbeatEvent):
-                self.send_bytes(proto.build_frame(0x0700, bytes([event.ping_val]), self.next_seq()))
+                log.info(f"Heartbeat ping received! Sending query_status to reset watchdog.")
+                self.send_bytes(proto.encode_query_status(self.next_seq()))
                 continue
 
             if isinstance(event, proto.AncModeEvent):
