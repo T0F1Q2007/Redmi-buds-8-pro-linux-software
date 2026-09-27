@@ -61,6 +61,10 @@ class InEarDetectionEvent:
     enabled: bool
 
 @dataclass(frozen=True)
+class HeartbeatEvent:
+    ping_val: int
+
+@dataclass(frozen=True)
 class BatteryEvent:
     left: int
     charging_left: bool
@@ -72,7 +76,7 @@ class BatteryEvent:
 ProtocolEvent = Union[
     AncModeEvent, AncDepthEvent, TransparencySubmodeEvent, AudioModeEvent,
     HeadTrackingEvent, CommuteModeEvent, LeModeEvent, DualConnectionEvent,
-    InEarDetectionEvent, BatteryEvent
+    InEarDetectionEvent, BatteryEvent, HeartbeatEvent
 ]
 
 
@@ -191,6 +195,9 @@ def parse_battery_tag(data: bytes) -> Optional[BatteryEvent]:
 
 def parse_notification(svc: int, payload: bytes) -> Optional[ProtocolEvent]:
     """Parse notification payload into a typed ProtocolEvent."""
+    if svc == 0x0700 and len(payload) >= 1:
+        return HeartbeatEvent(ping_val=payload[0])
+
     if svc in (SVC_ANC, SVC_ANC_ALT):
         if len(payload) >= 3 and payload[0] == 0x02:
             if payload[1] == 0x04 and payload[2] in (0, 1, 2):
