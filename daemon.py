@@ -1,3 +1,4 @@
+import threading
 """
 Redmi Buds 8 Pro Control Daemon
 High-efficiency background service for Xiaomi Vela OS M-BAP over RFCOMM Channel 28.
@@ -149,6 +150,7 @@ class BudsConnection:
             with self.lock:
                 self.sock      = s
                 self.connected = True
+                self._start_periodic_query()
             log.info("Connected to earbuds RFCOMM manually.")
             self.notify_state_change()
             
@@ -192,17 +194,26 @@ class BudsConnection:
                 time.sleep(2)
 
     def _start_periodic_query(self):
-        def _do_query():
-            if self.connected:
-                self.query_status()
-                return GLib.SOURCE_CONTINUE
-            return GLib.SOURCE_REMOVE
-        self._status_timer = GLib.timeout_add_seconds(30, _do_query)
+        self._stop_periodic_query()
+        self._query_stop_event = threading.Event()
+        
+        def loop():
+            while self.connected and not self._query_stop_event.is_set():
+                if self._query_stop_event.wait(10):
+                    break
+                if self.connected:
+                    try:
+                        self.query_status()
+                    except Exception:
+                        pass
+                        
+        from threading import Thread
+        self._status_thread = Thread(target=loop, daemon=True)
+        self._status_thread.start()
 
     def _stop_periodic_query(self):
-        if self._status_timer:
-            GLib.source_remove(self._status_timer)
-            self._status_timer = None
+        if hasattr(self, '_query_stop_event'):
+            self._query_stop_event.set()
 
     def accept_connection(self, fd: int):
         """Handle BlueZ Profile1 inbound connection handoff."""
@@ -218,6 +229,7 @@ class BudsConnection:
             with self.lock:
                 self.sock      = s
                 self.connected = True
+                self._start_periodic_query()
             log.info("Inbound RFCOMM connection accepted.")
             self.notify_state_change()
             self.listen_loop()
@@ -289,10 +301,6 @@ class BudsConnection:
 
         state_changed = False
         for event in events:
-            if isinstance(event, proto.HeartbeatEvent):
-                log.info(f"Heartbeat ping received! Sending direct response (04) to acknowledge seq {event.seq}.")
-                self.send_bytes(proto.build_response_frame(0x0700, 0x00, b'', event.seq))
-                continue
 
             if isinstance(event, proto.AncModeEvent):
                 if event.mode != self.anc_mode:
