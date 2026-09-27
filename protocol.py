@@ -63,6 +63,7 @@ class InEarDetectionEvent:
 @dataclass(frozen=True)
 class HeartbeatEvent:
     ping_val: int
+    seq: int
 
 @dataclass(frozen=True)
 class BatteryEvent:
@@ -88,6 +89,16 @@ def build_frame(svc: int, payload: bytes, seq: int) -> bytes:
         0xFE, 0xDC, 0xBA, CMD_MARKER,
         (svc >> 8) & 0xFF, svc & 0xFF,
         length & 0xFF, seq & 0xFF
+    ])
+    return header + payload + bytes([FRAME_TRAILER])
+
+def build_response_frame(svc: int, status: int, payload: bytes, seq: int) -> bytes:
+    """Build a complete RFCOMM response frame: FE DC BA 04 [svc:2] [len:1] [status:1] [seq:1] [payload] EF."""
+    length = len(payload) + 2
+    header = bytes([
+        0xFE, 0xDC, 0xBA, 0x04,
+        (svc >> 8) & 0xFF, svc & 0xFF,
+        length & 0xFF, status & 0xFF, seq & 0xFF
     ])
     return header + payload + bytes([FRAME_TRAILER])
 
@@ -193,10 +204,10 @@ def parse_battery_tag(data: bytes) -> Optional[BatteryEvent]:
     return None
 
 
-def parse_notification(svc: int, payload: bytes) -> Optional[ProtocolEvent]:
+def parse_notification(svc: int, payload: bytes, seq: int = 0) -> Optional[ProtocolEvent]:
     """Parse notification payload into a typed ProtocolEvent."""
     if svc == 0x0700 and len(payload) >= 1:
-        return HeartbeatEvent(ping_val=payload[0])
+        return HeartbeatEvent(ping_val=payload[0], seq=seq)
 
     if svc in (SVC_ANC, SVC_ANC_ALT):
         if len(payload) >= 3 and payload[0] == 0x02:
@@ -296,9 +307,10 @@ def parse_stream(buffer: bytes) -> Tuple[List[ProtocolEvent], bytes]:
         if pkt_end >= len(buffer):
             break
 
+        seq      = buffer[i + 7]
         payload = buffer[i + 8 : pkt_end]
         if pkt_type == NOTIF_MARKER:
-            event = parse_notification(svc, payload)
+            event = parse_notification(svc, payload, seq)
             if event:
                 events.append(event)
 
