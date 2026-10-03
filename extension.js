@@ -156,6 +156,20 @@ const FEATURES = [
                 get: s => s.in_ear_det,
                 set: (proxy, st) => proxy.SetInEarDetectionRemote(st),
             },
+            {
+                id: 'gaming_mode',
+                label: 'Gaming Mode (Low Latency)',
+                get: s => s.le_mode,
+                set: (proxy, st, ctx) => {
+                    proxy.SetLeModeRemote(st);
+                    let soundFile = st ? 'le_on.wav' : 'le_off.wav';
+                    let soundPath = GLib.build_filenamev([ctx._extensionPath, 'sounds', soundFile]);
+                    if (GLib.file_test(soundPath, GLib.FileTest.EXISTS)) {
+                        let proc = Gio.Subprocess.new(['aplay', soundPath], Gio.SubprocessFlags.NONE);
+                        proc.wait_check_async(null, null);
+                    }
+                },
+            },
         ],
     },
 ];
