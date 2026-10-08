@@ -3,7 +3,7 @@
   "description": "Control ANC, EQ, and settings for Redmi Buds 8 Pro.",
   "uuid": "buds8pro@toowfeeq",
   "shell-version": [
-    "45", "46", "47", "48", "49", "50"
+    "45", "46", "47", "48", "49", "50", "51"
   ],
   "settings-schema": "org.gnome.shell.extensions.buds8pro",
   "url": "https://github.com/istisu/buds8pro-gnome-extension"

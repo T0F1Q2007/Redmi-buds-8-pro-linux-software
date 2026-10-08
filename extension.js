@@ -632,7 +632,7 @@ class BudsIndicator extends PanelMenu.Button {
         let container = item;
 
         if (config.label) {
-            let vBox = new St.BoxLayout({ vertical: true, x_expand: true });
+            let vBox = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
             vBox.add_child(new St.Label({ text: config.label, style_class: 'buds-slider-label' }));
             let btnBox = new St.BoxLayout({ style_class: 'buds-button-group', x_expand: true });
             let btns = config.items.map(it => this._pill(it.icon, it.value, it.title, val => config.set(this._proxy, val)));
@@ -668,7 +668,7 @@ class BudsIndicator extends PanelMenu.Button {
 
     _buildSlider(config) {
         let slItem = new PopupMenu.PopupBaseMenuItem({ reactive: false });
-        let slBox  = new St.BoxLayout({ vertical: true, x_expand: true, style_class: 'buds-slider-box' });
+        let slBox  = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true, style_class: 'buds-slider-box' });
         slBox.add_child(new St.Label({ text: config.label, style_class: 'buds-slider-label' }));
 
         let slider = new Slider.Slider(0.5);
